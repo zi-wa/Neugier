@@ -77,7 +77,7 @@ def test_verify_exact_normalized_chunks_and_failures(tmp_path):
     src = _write(camp / "cache" / "smith2020.txt", SOURCE)
 
     exact = cache.verify_excerpt("For every finite set S of integers with at least two elements", "smith2020", camp)
-    assert exact.verified is True and exact.method == "exact" and exact.source_path == str(src)
+    assert exact.verified is True and exact.method == "exact" and exact.source_path == "cache/smith2020.txt"
     assert exact.source_sha256 and len(exact.excerpt_hash) == 12
 
     norm = cache.verify_excerpt('S is an arithmetic progression. The proof uses the "compression" technique', "smith2020", camp)

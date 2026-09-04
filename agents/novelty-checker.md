@@ -45,3 +45,12 @@ Follow `skills/references/novelty-protocol.md` exactly; the memo format there is
 - A `1a` with < 8 queries or no forward walk is invalid; say so rather than pass.
 - Documented failure modes to avoid: presenting references as if they were the result; missing a recent paper that a plain web
   search finds; confusing the target with a similarly named problem.
+## Round-2 protocol (supersedes conflicting lines above)
+
+### Final-statement re-check
+The topic search happened before the result existed; the result may have been published since. Add a `## Final-statement
+queries` section with **≥ 3 queries that contain the claim's specific quantities** (the values of the `results.json` keys the
+artifact's `numerics:` references — read them from `experiments/results.json`) and the exact final wording. Record
+`artifact_sha256: <sha256 of the artifact you classified>` and `citation_hops: <1|2>` in the verdict block (`harness review
+check` requires both at stakes 2). Use `.venv/Scripts/python.exe -m harness` `lit cite-walk <seed> --direction both --hops 2 --max 50` for the citation walks
+and `.venv/Scripts/python.exe -m harness` `lit verify-excerpt` for every excerpt in the prior-results table. Read `skills/references/novelty-protocol.md` §5–§6.

@@ -59,3 +59,26 @@ Write budgets into `campaign.json` (`budgets`) with a Python snippet.
 - Use excerpts from `survey.md` when citing what is known; never new literature claims without fetching.
 - When re-planning after a `REVISE_PLAN`/`PIVOT` verdict: read `reviews/roundN/judge.md`, mark dead routes in `ideas.md`
   (status `dead`, reason), add rejected topics to the library (`... library add-rejected`), and produce the new plan.
+## Round-2 protocol (supersedes conflicting lines above)
+
+### Read first
+`HUMAN.md` (`## Policy`; never edit it), `.venv/Scripts/python.exe -m harness` `library lessons --query "<topic>"`, `.venv/Scripts/python.exe -m harness` `library moves-stats`,
+`.venv/Scripts/python.exe -m harness` `library list questions` (open questions of earlier campaigns), `skills/references/technique-pitfalls.md`.
+
+### Additional deliverables
+- **Stakes** per target: `ledger add … --stakes 0|1|2` (`.venv/Scripts/python.exe -m harness` `campaign suggest-stakes <slug>` is a hint; 2 = listed open
+  problem / best-known-value update / prize). The review regime is derived from it.
+- **Pre-registered credences** on every target, conjecture, bound and construction before any budget is spent:
+  `.venv/Scripts/python.exe -m harness` `ledger credence <ID> --role strategist --p-true … --p-budget … --why "…" --panel skeptic=…,optimist=…,base-rate=…`
+  (write the three panel numbers as three different people would; a flat 0.5 everywhere is visible in the spread).
+  Every `## Route` in `ideas.md` carries `- Credence: p_true=… p_budget=… (strategist) — why` and `- Status: untested`.
+- **Marking scheme** `proofs/<ID>.rubric.md` for every active target, written *before* any proof exists: frontmatter
+  `claim, technique[], required_hypotheses[], must_establish[], hard_step, version`, then `## Marking scheme` and `## Pitfalls`
+  (copied from the technique sections). No route hints, no priming language (the linter checks). `campaign lock-statement`
+  freezes it with the statement; lemma rubrics later go through `campaign add-rubric-hash`.
+- `.venv/Scripts/python.exe -m harness` `ideas dedup --campaign <slug>` must be clean (near-duplicate routes / shared lenses are advisories at the plan gate).
+- Budgets via `.venv/Scripts/python.exe -m harness` `campaign budget <slug> --set …` (`hours_total`, `hours_per_phase.*`, `max_review_rounds`, `curiosity_fraction`).
+
+### At campaign finish
+Write `## Lessons` bullets in `log.md` (`- [phase=plan] <lesson> — evidence: <path> — moves: M70,M12 — tags: route,dead`),
+update every route's `- Status:` line, and state in `## Outcome` what we still do not know.

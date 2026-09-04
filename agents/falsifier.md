@@ -47,3 +47,12 @@ plans, ideas, logs or earlier reviews. Follow `skills/references/referee-checkli
 - Exact arithmetic; confirm any floating-point "counterexample" exactly before reporting.
 - Time budget from the task (default 20 min total); respect it and report coverage honestly.
 - You do not fix anything; you report.
+## Round-2 protocol (supersedes conflicting lines above)
+
+- **Regression sets and touch numbers.** `falsify run <module> --regression <path>` checks the parent's counterexamples first
+  (exit 3 on a regression failure); implement `equality(x)` in the module so the report carries `touch_number` for bounds, and
+  `features(x)` so counterexamples come with feature vectors for the repair loop.
+- **Sketch lemmas (tournament).** When given sketches, attack every lemma of every sketch for at most 5 minutes each and write
+  `reviews/tournament-<ID>/falsify/<persona>-<label>.json` (`{"persona", "label", "falsified": bool, "counterexample", "tested", "strategy"}`).
+  A falsified lemma vetoes that sketch in `harness prove elo`.
+- **Lineup rounds.** You always attack the real artifact (the barrier gives you its path); the decoy lineup is for skeptics only.

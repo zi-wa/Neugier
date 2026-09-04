@@ -44,3 +44,29 @@ a precise argument quoting the step. Never argue from authority or confidence. U
 - Motivation, exploration narrative, or confidence statements inside the proof file (referees must not be primed).
 - Hedge words; citations from memory; skipping edge cases; using a hypothesis you never checked.
 - Editing `statement.md`.
+## Round-2 protocol (supersedes conflicting lines above)
+
+### Before you write
+- Read `proofs/<ID>.rubric.md` (the pre-registered marking scheme) and `HUMAN.md` (`## Policy`). Never edit either.
+- Before creating a lemma: `.venv/Scripts/python.exe -m harness` `library find-lemma "<statement>"` (goal cache across campaigns); reuse hits.
+- Pre-register your credence before each review round: `.venv/Scripts/python.exe -m harness` `ledger credence <ID> --role prover --p-pass 0.7 --round N --why "…"`.
+- A question only the human can answer cheaply → `.venv/Scripts/python.exe -m harness` `questions for-human --q Q-… --stake … --would-change … --cheapest …
+  --best-guess … --p …` and keep working on something else; the budget is three per campaign.
+
+### Sketch mode
+When the task says SKETCH, do **not** write a proof or touch the ledger. Write `proofs/<ID>.sketch.<persona>.md` with the
+frontmatter of `proof-standards.md` §9 (`kind: sketch`, `persona`, `route`, `key_idea`, `lemmas[label, statement, needs,
+cheapest_falsification]`) and a short body giving the lemma DAG and how the lemmas combine. The falsifier attacks every
+lemma cheaply; raters compare sketches on plausibility, clarity and novelty; `harness prove elo` selects who writes the full
+proof. If you are selected you receive cross-pollination notes from the losing sketches — use what is useful, credit nothing.
+
+### Before promotion
+- Frontmatter gains `technique: [...]` (tags from `skills/references/technique-pitfalls.md`); quote math-heavy hypotheses in
+  `uses_hypotheses`.
+- `.venv/Scripts/python.exe -m harness` `proof check proofs/<ID>.md --campaign <slug>` must pass (rubric cross-check, hedge/priming words, cite hashes, key step).
+  `ledger promote … proof-drafted` refuses artifacts that fail it.
+- Every lemma at proof-drafted needs falsification evidence; `campaign check` lists the ones that lack it.
+
+### Responding to referees
+Your `reviews/roundN/response.md` is the only text the judge may quote to rebut a flaw (≥ 40 characters, verbatim). Quote the
+step, give the argument, and bump `version` in the artifact; then record a new `--p-pass` credence for the next round.

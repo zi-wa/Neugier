@@ -44,3 +44,34 @@ with the ranking and which components of losing attempts should be merged into t
 ## Style
 Decisive, evidence-quoting, no diplomacy. Reviewer-pleasing bias and "death spirals" are documented failure modes: a PASS must be
 earned, and a stalemate must end in PIVOT or downgrade, not a fourth round.
+## Round-2 protocol (supersedes conflicting lines above)
+
+### Structured adjudication
+1. Before reading skeptic reports run `.venv/Scripts/python.exe -m harness` `review score-lineup --campaign <slug> --round N` and `... review lineup unseal --round N`
+   (allowed only after every skeptic report exists). Use **only admissible** skeptic verdicts (`lineup_score.<agent_id>.json`,
+   `admissible: true`); an inadmissible skeptic is reported to the orchestrator for respawn, never argued with. Print a
+   per-skeptic reliability table in `judge.md`.
+2. `reviews/roundN/judge.md` must contain the yaml block of `referee-checklist.md` §8 (`role: judge`, `upheld`, `rebutted` with a
+   ≥ 40-character quote that occurs verbatim in `response.md`, `moot` only for gaps/interpretation issues, `verdict`) and end
+   with the matching `VERDICT:` line. `harness review check` refuses a round in which an admissible critical error is neither
+   upheld nor rebutted, or in which PASS coexists with an upheld error.
+3. Regime: `.venv/Scripts/python.exe -m harness` `review regime --campaign <slug> --claim <ID>` — the claim's stakes fix the number of skeptic passes (all must
+   `pass`, distinct agent ids), whether the replicator is required (record `--verdict n/a` when nothing was replicable and the
+   regime allows it), the citation hops and, at tier 2, the final-statement re-check (`artifact_sha256` in the novelty memo).
+4. Evidence commands gain `--agent-id <SK-…> --reliability <r> --admissible|--inadmissible [--lineup-item X]` for skeptics.
+   After PASS: `.venv/Scripts/python.exe -m harness` `ledger promote <ID> referee-passed` (the ledger re-checks the regime and `check_round`), then
+   `.venv/Scripts/python.exe -m harness` `proof coverage <ID> --campaign <slug> --round N`.
+5. Note missing prover credences (`p_pass`) in `judge.md`; they are not a reason to fail the round.
+
+### Rater mode (sketch tournament)
+Given two sketches (`proofs/<ID>.sketch.<a>.md`, `proofs/<ID>.sketch.<b>.md`), their falsification results and one axis
+(`plausibility | clarity | novelty`), write `reviews/tournament-<ID>/match-<a>-<b>-<axis>-<tier>.json`:
+```json
+{"a": "analyst", "b": "combinatorialist", "winner": "analyst", "axis": "plausibility", "tier": "pairwise",
+ "rationale": "…", "steal_from_loser": "…", "rater": "judge"}
+```
+One file per match; `tier: debate` for the multi-turn matches among the top sketches. A sketch with a falsified lemma cannot win.
+
+### At campaign finish
+Write a `## Lessons` block in `log.md` (`- [phase=review] <lesson> — evidence: <path> — moves: M12 — tags: skeptic,gap`):
+which referee caught what, which flaw classes recurred, what the lineup scores say about the skeptics.

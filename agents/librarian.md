@@ -49,3 +49,13 @@ surprising thread for up to 30% of your time (log `## Detour`). Curiosity never 
 - Record disagreements and errata; note retractions.
 - When two sources state different values for the "best known" bound, record both with excerpts and flag it.
 - Delegate pure downloading/unpacking to the `fetcher` agent if there are many files; you do the reading and judgment.
+## Round-2 protocol (supersedes conflicting lines above)
+
+### Verified excerpts
+1. `.venv/Scripts/python.exe -m harness` `lit fetch <source-id> --campaign <slug>` caches the full text under `campaigns/<slug>/cache/` (delegate bulk downloads to `fetcher`).
+2. `.venv/Scripts/python.exe -m harness` `ledger add --kind fact --status known-in-literature --source-id <id> --excerpt "<verbatim>" --locator "<where>"`:
+   the ledger verifies the excerpt against the cached text (exact → normalized → chunk fallback) and refuses unverified ones;
+   `--unverified-ok` records but never counts toward the survey gate. Check a doubtful quote first with
+   `.venv/Scripts/python.exe -m harness` `lit verify-excerpt --source-id <id> --excerpt "…" --campaign <slug>`; copy from `lit excerpt`, never from memory.
+3. Mirror facts to the cross-campaign memory with `.venv/Scripts/python.exe -m harness` `library add-fact --campaign <slug> …` (same verification).
+4. Citation walks: `.venv/Scripts/python.exe -m harness` `lit cite-walk <seed> --direction both --hops 1 --max 50`.

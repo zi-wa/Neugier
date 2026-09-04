@@ -3,7 +3,7 @@
   "claims": {
     "D-001": {
       "attestation": null,
-      "created": "2026-09-04T01:36:41.492365+00:00",
+      "created": "2026-09-04T02:09:45.694419+00:00",
       "depends_on": [],
       "evidence": [],
       "hash": "26b7789be77efe2d1b4ba784a6c9625b1d40d8b91898f83dc635a1599cc77f34",
@@ -14,7 +14,7 @@
           "from": null,
           "op": "add",
           "to": "idea",
-          "ts": "2026-09-04T01:36:41.492471+00:00"
+          "ts": "2026-09-04T02:09:45.694527+00:00"
         }
       ],
       "id": "D-001",
@@ -27,15 +27,15 @@
       "statement": "S+S = {a + b : a, b in S}.",
       "status": "idea",
       "tags": [],
-      "updated": "2026-09-04T01:36:41.492471+00:00"
+      "updated": "2026-09-04T02:09:45.694527+00:00"
     },
     "F-001": {
       "attestation": null,
-      "created": "2026-09-04T01:36:41.496290+00:00",
+      "created": "2026-09-04T02:09:45.697897+00:00",
       "depends_on": [],
       "evidence": [
         {
-          "added": "2026-09-04T01:36:41.499521+00:00",
+          "added": "2026-09-04T02:09:45.701055+00:00",
           "admissible": null,
           "agent_id": null,
           "excerpt": "Every finite set A of integers with |A+A| <= K|A| is contained in a generalized arithmetic progression of dimension d(K) and size f(K)|A|.",
@@ -48,7 +48,7 @@
           "role": null,
           "round": null,
           "source_id": "Freiman1973",
-          "source_path": "C:\\Users\\admin\\Desktop\\ClaudeMath\\tests\\fixtures\\planted\\campaign\\cache\\Freiman1973.txt",
+          "source_path": "cache/Freiman1973.txt",
           "source_sha256": "3cdcc622042f81ca1246b7f59f2819c6e98666b1472749ecace26921d22b66ba",
           "summary": "",
           "type": "excerpt",
@@ -64,7 +64,7 @@
           "from": null,
           "op": "add",
           "to": "idea",
-          "ts": "2026-09-04T01:36:41.496344+00:00"
+          "ts": "2026-09-04T02:09:45.697952+00:00"
         },
         {
           "claim_id": "F-001",
@@ -73,7 +73,7 @@
           "from": null,
           "op": "add_evidence",
           "to": "excerpt",
-          "ts": "2026-09-04T01:36:42.285200+00:00",
+          "ts": "2026-09-04T02:09:46.468198+00:00",
           "verified": false
         }
       ],
@@ -87,15 +87,15 @@
       "statement": "Freiman's theorem: sets with small doubling are contained in generalized arithmetic progressions.",
       "status": "idea",
       "tags": [],
-      "updated": "2026-09-04T01:36:42.285200+00:00"
+      "updated": "2026-09-04T02:09:46.468198+00:00"
     },
     "L-001": {
       "attestation": null,
-      "created": "2026-09-04T01:36:42.288675+00:00",
+      "created": "2026-09-04T02:09:46.471789+00:00",
       "depends_on": [],
       "evidence": [
         {
-          "added": "2026-09-04T01:36:42.304584+00:00",
+          "added": "2026-09-04T02:09:46.485724+00:00",
           "admissible": null,
           "agent_id": null,
           "excerpt": null,
@@ -124,7 +124,7 @@
           "from": null,
           "op": "add",
           "to": "idea",
-          "ts": "2026-09-04T01:36:42.288739+00:00"
+          "ts": "2026-09-04T02:09:46.471855+00:00"
         },
         {
           "claim_id": "L-001",
@@ -132,7 +132,7 @@
           "from": null,
           "op": "add_evidence",
           "to": "proof",
-          "ts": "2026-09-04T01:36:42.314536+00:00"
+          "ts": "2026-09-04T02:09:46.487744+00:00"
         },
         {
           "claim_id": "L-001",
@@ -140,7 +140,7 @@
           "from": "idea",
           "op": "promote",
           "to": "proof-drafted",
-          "ts": "2026-09-04T01:36:42.318054+00:00"
+          "ts": "2026-09-04T02:09:46.491206+00:00"
         }
       ],
       "id": "L-001",
@@ -153,11 +153,11 @@
       "statement": "For every finite S with |S| >= 2, |S+S| >= 2|S| - 1.",
       "status": "proof-drafted",
       "tags": [],
-      "updated": "2026-09-04T01:36:42.318054+00:00"
+      "updated": "2026-09-04T02:09:46.491206+00:00"
     },
     "L-002": {
       "attestation": null,
-      "created": "2026-09-04T01:36:42.294692+00:00",
+      "created": "2026-09-04T02:09:46.475867+00:00",
       "depends_on": [],
       "evidence": [],
       "hash": "9b50966003d7fd9c9ea1c6049f74a9396ce493b7e063a34fe00c7863090ea315",
@@ -168,7 +168,7 @@
           "from": null,
           "op": "add",
           "to": "conjectured",
-          "ts": "2026-09-04T01:36:42.294751+00:00"
+          "ts": "2026-09-04T02:09:46.475925+00:00"
         }
       ],
       "id": "L-002",
@@ -181,11 +181,11 @@
       "statement": "For every finite S of integers, every element of S+S is a+b for at most two ordered pairs (a, b).",
       "status": "conjectured",
       "tags": [],
-      "updated": "2026-09-04T01:36:42.294751+00:00"
+      "updated": "2026-09-04T02:09:46.475925+00:00"
     },
     "T-001": {
       "attestation": null,
-      "created": "2026-09-04T01:36:42.298041+00:00",
+      "created": "2026-09-04T02:09:46.479294+00:00",
       "depends_on": [
         "L-001",
         "L-002",
@@ -193,7 +193,7 @@
       ],
       "evidence": [
         {
-          "added": "2026-09-04T01:36:42.328261+00:00",
+          "added": "2026-09-04T02:09:46.501000+00:00",
           "admissible": null,
           "agent_id": null,
           "excerpt": null,
@@ -214,7 +214,7 @@
           "verified": null
         },
         {
-          "added": "2026-09-04T01:36:42.344365+00:00",
+          "added": "2026-09-04T02:09:46.506591+00:00",
           "admissible": null,
           "agent_id": null,
           "excerpt": null,
@@ -243,7 +243,7 @@
           "from": null,
           "op": "add",
           "to": "idea",
-          "ts": "2026-09-04T01:36:42.298096+00:00"
+          "ts": "2026-09-04T02:09:46.479351+00:00"
         },
         {
           "claim_id": "T-001",
@@ -258,7 +258,7 @@
           "round": null,
           "spread": null,
           "to": null,
-          "ts": "2026-09-04T01:36:42.301331+00:00"
+          "ts": "2026-09-04T02:09:46.482500+00:00"
         },
         {
           "claim_id": "T-001",
@@ -266,7 +266,7 @@
           "from": null,
           "op": "add_evidence",
           "to": "proof",
-          "ts": "2026-09-04T01:36:42.340800+00:00"
+          "ts": "2026-09-04T02:09:46.503002+00:00"
         },
         {
           "claim_id": "T-001",
@@ -274,7 +274,7 @@
           "from": null,
           "op": "add_evidence",
           "to": "computation",
-          "ts": "2026-09-04T01:36:42.354064+00:00"
+          "ts": "2026-09-04T02:09:46.508596+00:00"
         },
         {
           "claim_id": "T-001",
@@ -282,7 +282,7 @@
           "from": "idea",
           "op": "promote",
           "to": "proof-drafted",
-          "ts": "2026-09-04T01:36:42.357713+00:00"
+          "ts": "2026-09-04T02:09:46.512237+00:00"
         }
       ],
       "id": "T-001",
@@ -298,7 +298,7 @@
         "assumes:F-001",
         "assumes:L-002"
       ],
-      "updated": "2026-09-04T01:36:42.357713+00:00"
+      "updated": "2026-09-04T02:09:46.512237+00:00"
     }
   },
   "version": 1

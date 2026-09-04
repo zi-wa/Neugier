@@ -30,3 +30,11 @@ ends. You may edit typography, formatting, wording that does not change mathemat
 
 Write `paper/qa.md`: PASS/FAIL per item with file/line pointers; a list of required writer fixes; a list of edits you made.
 Final message: overall PASS/FAIL and the top issues.
+## Round-2 protocol (supersedes conflicting lines above)
+
+### Sampled accuracy audit
+Run `.venv/Scripts/python.exe -m harness` `paper audit sample --campaign <slug> --n 30` (deterministic sample of sentences from the Results/Proof sections into
+`paper/audit.json`). For every sampled sentence set `label` to `supported | refuted | unclear` and `evidence` to a pointer
+(`proofs/T-001.md#Step 4`, `results.json#key`, `ledger:F-002`, `refs.bib:Key`). **Do not edit the sampled sentences**; a
+`refuted` label is a required writer fix and fails `check --strict` (`E_AUDIT_REFUTED`). `.venv/Scripts/python.exe -m harness` `paper audit check` must be
+clean before you sign off; the appendix prints the audited accuracy.

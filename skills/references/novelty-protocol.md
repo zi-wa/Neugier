@@ -3,7 +3,9 @@
 Run **before** proof effort (in Plan) and **again before writing** (in Review, by `novelty-checker`). The output is a memo,
 `reviews/roundN/novelty.md` (or `survey.md` §Novelty in Plan), never a yes/no. Documented failures this protocol exists to
 prevent: "Erdősgate" (Oct 2025: existing references presented as solutions), Erdős #1026 (key 2024 paper missed by "deep
-research" tools, found by Google Scholar), #851 (search confused with a different problem), ≈24 wiki entries of class 1b.
+research" tools, found by Google Scholar), #851 (search confused with a different problem), ≈24 wiki entries of class 1b, and
+the clique-avoiding-codes case (arXiv 2511.16072 §II.3: a bound that "had appeared on Arxiv nearly 3 years previously" was found
+only when the *final statement* was searched, not the topic).
 
 ## 1. Build the query set (write it down)
 
@@ -27,15 +29,16 @@ Aim for 8–15 distinct queries. Record them verbatim in the memo.
 | OEIS | `--engine oeis` / `oeis-conjectures` | sequences and their references |
 | erdosproblems yaml + AI wiki | `.cache/sources/erdosproblems/data/problems.yaml`; wiki page | status, `ai_attempts`, prior AI failures |
 | formal-conjectures | repo search | whether a formal statement exists and is marked solved |
+| Lemma bank | `python -m harness library find-lemma "<statement>"` | what earlier campaigns already proved or found |
 
 ## 3. Citation walk (snowballing)
 
 1. Pick ≥ 3 **seed papers** (the best-known result, the most recent progress, a survey).
-2. **Backward**: read their reference lists for anything with a matching title/quantity (fetch the TeX source:
-   `python -m harness lit fetch <id>`; grep with `excerpt`).
-3. **Forward**: `openalex.cited_by` on each seed; for the last 3 years read every title/abstract.
-4. Two hops for the most relevant hit.
-5. Surveys' "open problems" / "recent progress" sections are read in full.
+2. `python -m harness lit cite-walk <seed> --direction both --hops 1 --max 50` for each seed (forward = works citing it, backward =
+   its references), then read every title/abstract of the last 3 years; two hops (`--hops 2`) for the most relevant hit.
+   Tier-2 claims (`stakes: 2`) **require** a two-hop walk; record `citation_hops:` in the verdict block.
+3. Fetch the source of every candidate (`python -m harness lit fetch <id>` into the campaign cache); grep with `excerpt`.
+4. Surveys' "open problems" / "recent progress" sections are read in full.
 
 ## 4. Compare, do not skim
 
@@ -48,7 +51,14 @@ statement · hypotheses · bound/constant · method · year · locator. Then cla
   if the *method* is new and the memo says why.
 - `1d` **misread**: the literature resolves the intended problem; our statement differs from the intended one.
 
-## 5. Memo format
+## 5. Final-statement re-check (Review phase)
+
+The Plan-phase memo searched the topic before the result existed. In Review, add a **`## Final-statement queries`** section
+with ≥ 3 queries that contain the claim's *specific quantities* — the values of the `results.json` keys the proof's `numerics:`
+references (the harness checks that they appear) — and the exact final wording of the theorem. Record the sha256 of the
+artifact you classified as `artifact_sha256:` in the verdict block; `harness review check` requires it at tier 2.
+
+## 6. Memo format
 
 ```markdown
 # Novelty memo — <claim id> — round N — <date>
@@ -56,17 +66,21 @@ statement · hypotheses · bound/constant · method · year · locator. Then cla
 ## Seeds and citation walk (ids, hops, what was read)
 ## Closest prior results
 | Source | Statement (excerpt, locator) | Relation to ours | Delta |
+## Final-statement queries
+- "<exact quantity> <object>" …
 ## Classification: 1a | 1b | 1c | 1d   (confidence 0–1)
 ## What was NOT checked (timebox reached, paywalled sources, languages)
 ## Recommended bib additions (resolved keys)
 ```
 
-Every prior-result row must carry a verbatim excerpt obtained by tool this session; no excerpt → row marked `unverified` and
-excluded from the classification.
+followed by the verdict block (referee-checklist §7) with `class:`, `citation_hops:`, `artifact_sha256:`.
+Every prior-result row must carry a verbatim excerpt obtained by tool this session and verified against the cached source
+(`harness lit verify-excerpt`); no verified excerpt → row marked `unverified` and excluded from the classification.
 
-## 6. Rules
+## 7. Rules
 
 - Timebox: Plan-phase gate 45 min; Review-phase gate 90 min. Unfinished → say what was not covered.
 - A `1a` classification with fewer than 8 queries or without a forward walk is invalid.
-- The novelty memo is written by a fresh agent that has not seen the prover's reasoning.
-- Record every new confirmed fact in `library/facts.jsonl` (`python -m harness library add-fact ...`) so future campaigns reuse it.
+- The novelty memo is written by a fresh agent that has not seen the prover's reasoning (the barrier hook enforces it).
+- Record every new confirmed fact in `library/facts.jsonl` (`python -m harness library add-fact --campaign <slug> …`; the
+  excerpt must verify against the cache) so future campaigns reuse it.

@@ -47,3 +47,23 @@ whether the definition unit tests actually pin the definitions, and whether the 
 Terse, specific, witness-driven. You are not allowed to fix the proof. A pass without a "checked" list is invalid.
 Your curiosity is adversarial (rule R6, `curiosity.md` §6): dig where the proof is weakest and where *you* would need to see
 more to believe it, not where the checklist points; the checklist is the minimum, not the order.
+## Round-2 protocol (supersedes conflicting lines above)
+
+### Inputs you are given
+Your task names: the campaign slug, the round, **your agent id** (`SK-…`; put it in every verdict block as `agent_id:`), the
+paths you may read (`statement.md`; either `proofs/<ID>.md` or the lineup directory `reviews/roundN/lineup/`; the marking scheme
+`proofs/<ID>.rubric.md`; `skills/references/technique-pitfalls.md`), the ledger fact ids you may show, and your output path
+`reviews/roundN/skeptic.<agent_id>.md`. The barrier hook logs every access; a denied access is recorded and is never retried
+another way.
+
+### Marking scheme and technique pitfalls
+Read `proofs/<ID>.rubric.md` first: every `must_establish` item and every pitfall of the artifact's `technique:` tags
+(`technique-pitfalls.md`) becomes a mandatory row of your `checked` list (or a FLAWED row with the witness shape it asks for).
+Keep the step table in the four-column format of `referee-checklist.md` §2 — it is machine-read for the coverage metric.
+
+### Lineup mode
+When the task points at `reviews/roundN/lineup/`, you receive items `A.md`, `B.md`, … — the real proof, mutants with one planted
+flaw each, and possibly a control proof of another statement — in unknown order. Review **every** item with the full §1–§3
+procedure and emit one §7 verdict block per item with `item: <letter>` and `agent_id: <yours>`. Never diff items against each
+other, never read `proofs/`, never guess which is real (the hook denies and logs it). A `pass` on a mutant is a miss; your
+reliability (recall on planted flaws minus false alarms on the control) decides whether your verdict on the real item counts.

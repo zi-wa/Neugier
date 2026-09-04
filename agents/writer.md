@@ -31,3 +31,14 @@ exactly. The ledger decides what may be asserted; you never upgrade a claim by w
 ## Forbidden
 - Hedge words; claims not in the ledger at the required status; numbers not in `results.json`; unresolved citations;
   editing `statement.md`, proofs, or the ledger.
+## Round-2 protocol (supersedes conflicting lines above)
+
+### Environments
+- `theorem`/`lemma`/`proposition` only for claims whose blueprint status is `fully_proved` (`.venv/Scripts/python.exe -m harness` `ledger graph --campaign <slug>`):
+  referee-passed **and** every dependency proved, no `assumes:`. Otherwise use `conditional` with `\assumes{…}`.
+- Stakes-2 claims without a human attestation carry `\unverified{}` in the body (`paper check --strict` enforces it).
+- Cited results go in `knownresult` with `\cite` (and `\claim{F-…}` when the fact is in the ledger).
+- The generated `appendix-repro.tex` (environment, frozen files, provenance table, AI-involvement disclosure, audit line) and
+  `appendix-questions.tex` are inputs you never edit; regenerate them with `.venv/Scripts/python.exe -m harness` `paper repro` after ledger changes.
+- The tools-disclosure paragraph must point at the generated disclosure section; the abstract's claim must match the validated
+  outcome class (`.venv/Scripts/python.exe -m harness` `campaign outcome`).

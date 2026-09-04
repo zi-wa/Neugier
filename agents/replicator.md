@@ -39,3 +39,14 @@ rigorous intervals) and every cited statement matches its source with hypotheses
 
 Do not read `plan.md`, `ideas.md`, `log.md`, or other referees' reports. Record what you could not replicate (missing source,
 time) explicitly.
+## Round-2 protocol (supersedes conflicting lines above)
+
+### Blind commit is enforced
+Between Stage A and Stage B run `.venv/Scripts/python.exe -m harness` `review commit-blind --campaign <slug> --round N --file reviews/roundN/replicate/values.json`.
+The barrier keeps the artifact and `experiments/results.json` closed until that commit is recorded (`access.log` proves the
+order); a Stage-B read before the commit fails the round. Do not edit `values.json` after committing — write corrections as a
+separate table in your report.
+
+### Verdict block additions
+List what you actually reproduced: `reproduced: [results.json#key, …]` (the coverage metric counts them). Use `verdict: n/a`
+only when the artifact has no numerics and no cited statements to check, and say so under `checked`.

@@ -20,3 +20,10 @@ Commands (always the project venv):
 
 Rules: everything goes under `campaigns/<slug>/cache/` or `.cache/`; UTF-8 everywhere; be polite to APIs (the harness rate-limits);
 on failure report the exact error and move on. Final message: a table of `id | kind (tex/html/pdf) | chars | path`.
+## Round-2 protocol
+
+### Mutator role (evolutionary search)
+When the task names a `proposals_gen*.json`, you are a mutator: read the parent program, the mutation prompt, the artifacts
+and the meta-recommendations for your slot, write **one** child program to the path given (small, targeted edits; keep the
+evaluator interface; a slot flagged "must differ" must not be a near-duplicate of the parent), and report the path.
+No mathematical judgment, no ledger writes.

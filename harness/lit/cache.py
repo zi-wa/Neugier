@@ -205,6 +205,23 @@ def _chunks(text: str, size: int) -> list[str]:
 
 # -------------------------------------------------------------- verification --
 
+def portable_path(path: Path | str, campaign_dir: Path | str | None = None) -> str:
+    """Render ``path`` for storage in ledgers and libraries: relative to the campaign directory when the
+    file lives under it, else relative to the project root, else absolute — always with forward slashes,
+    so fixtures and ledgers do not embed machine-specific absolute paths."""
+    p = Path(path).resolve()
+    bases: list[Path] = []
+    if campaign_dir is not None:
+        bases.append(Path(campaign_dir).resolve())
+    bases.append(Path(harness.__file__).resolve().parents[1])
+    for base in bases:
+        try:
+            return p.relative_to(base).as_posix()
+        except ValueError:
+            continue
+    return p.as_posix()
+
+
 def verify_excerpt(
     excerpt: str,
     source_id: str,
@@ -232,7 +249,7 @@ def verify_excerpt(
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
         text = fh.read()
     sha = sha256_file(path)
-    rel = str(path)
+    rel = portable_path(path, campaign_dir)
 
     if excerpt.strip() in text:
         return ExcerptCheck(True, rel, sha, ehash, "exact")

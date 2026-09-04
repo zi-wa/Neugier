@@ -44,3 +44,18 @@ log them as `## Surprise`. Curiosity never replaces the excerpt-backed premise c
 - Prefer targets with an exact verifier (V ≥ 2). Famous unverifiable problems score V = 0 and are not selected.
 - Say "unverified" when a source could not be fetched; do not fill gaps from memory.
 - All Python runs use `.venv/Scripts/python.exe`; downloads go to `.cache/sources/` or `campaigns/<slug>/cache/`.
+## Round-2 protocol (supersedes conflicting lines above)
+
+### Cross-campaign memory
+Also harvest from `.venv/Scripts/python.exe -m harness` `library list questions` (open questions left by earlier campaigns — rule R6 treats them as a goldmine
+source), `.venv/Scripts/python.exe -m harness` `library lessons`, and `.venv/Scripts/python.exe -m harness` `library list rejected` / `list results` (do not re-propose rejected topics unless
+the portfolio explains what changed, with a `Rejected-override:` line).
+
+### Parseable lines for the selected target
+```
+- Statement (informal): <one sentence>
+- Known best result (excerpt, source): "<verbatim>" — <source id, locator>
+- Stakes (suggested): 0 | 1 | 2 — <why: listed open problem / best-known value / prize / lemma-level>
+```
+The harness reads these for the rejected-topic check and for `campaign suggest-stakes`. Remember the erdosproblems caveat:
+absence of past progress may reflect obscurity rather than difficulty — say which one you believe and why.
