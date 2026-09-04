@@ -7,11 +7,11 @@
 
 <p align="center">
   <a href="https://github.com/zi-wa/Neugier/actions/workflows/tests.yml"><img src="https://github.com/zi-wa/Neugier/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
-  <img src="https://img.shields.io/badge/tests-356%20offline-BDB2FF" alt="356 offline tests">
-  <a href="pyproject.toml"><img src="https://img.shields.io/badge/python-3.11%2B-BDB2FF" alt="Python 3.11+"></a>
-  <img src="https://img.shields.io/badge/Claude%20Code-plugin-BDB2FF" alt="Claude Code plugin">
-  <img src="https://img.shields.io/badge/API%20key-not%20required-BDB2FF" alt="No API key required">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-BDB2FF" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/tests-356%20offline-0A9EDC?logo=pytest&logoColor=white" alt="356 offline tests">
+  <a href="pyproject.toml"><img src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+"></a>
+  <img src="https://img.shields.io/badge/Claude%20Code-plugin-D97757?logo=claude&logoColor=white" alt="Claude Code plugin">
+  <img src="https://img.shields.io/badge/API%20key-not%20required-16A34A" alt="No API key required">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-3DA639?logo=opensourceinitiative&logoColor=white" alt="MIT license"></a>
 </p>
 
 </div>
