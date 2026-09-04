@@ -9,10 +9,9 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
-# campaign bulk data
-campaigns/*/cache/
-campaigns/*/experiments/**/data/
-campaigns/*/paper/build/
+# campaign working directories and cross-campaign memory: local research state, never committed
+campaigns/
+library/
 
 # LaTeX build artifacts
 *.aux
@@ -35,4 +34,3 @@ Thumbs.db
 
 # eval workspaces and results (regenerated)
 evals/results/
-campaigns/eval-*/
