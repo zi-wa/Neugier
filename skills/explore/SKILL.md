@@ -7,7 +7,7 @@ effort: high
 
 # /explore — Phase 4
 
-`PY` = `.venv/Scripts/python.exe`. Set phase `explore`; open the gate. Read `plan.md` for the experiment order and budgets;
+`PY` = `.venv/Scripts/python.exe`. `PY -m harness campaign phase <slug> explore --gate` (records the phase and opens this session's gate). Read `plan.md` for the experiment order and budgets;
 `PY -m harness questions next --campaign <slug>` for the highest-information-gain question.
 
 1. Spawn `experimentalist` with: slug, `plan.md`, `ideas.md`, `questions.md`, targets, the results-key conventions

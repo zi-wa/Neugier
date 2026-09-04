@@ -1,54 +1,48 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 340" width="1200" height="340" role="img" aria-label="Neugier — curiosity, refereed. A mathematical research harness for Claude Code.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="Neugier — curiosity, refereed. A mathematical research harness for Claude Code.">
   <defs>
-    <linearGradient id="ladderd" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#6FA8DC"/>
-      <stop offset="45%" stop-color="#7ED957"/>
-      <stop offset="100%" stop-color="#1CAC78"/>
-    </linearGradient>
     <style>
-      .wordmark { font: 700 96px "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif; fill: #e6edf3; letter-spacing: -1px; }
-      .pron     { font: 400 22px ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #8b949e; }
-      .tag      { font: 600 30px ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #3fb950; letter-spacing: 0.5px; }
-      .chip     { font: 600 17px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; fill: #e6edf3; }
-      .chipmut  { font: 600 17px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; fill: #8b949e; }
-      .arrow    { stroke: #30363d; stroke-width: 2; fill: none; }
+      .wordmark { font: 700 92px "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif; fill: #f0eefb; letter-spacing: -1px; }
+      .pron     { font: 400 20px ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #8b8b9c; }
+      .tag      { font: 600 28px ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #BDB2FF; letter-spacing: 0.4px; }
+      .chip     { font: 500 16px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; fill: #9d9db0; }
+      .chipon   { font: 600 16px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; fill: #1b1730; }
+      .step     { font: 500 16px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; fill: #74748a; }
+      .stepon   { font: 700 16px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; fill: #f0eefb; }
+      .rule     { stroke: #2c2c3a; stroke-width: 2; }
     </style>
   </defs>
 
-  <rect width="1200" height="340" fill="#0d1117"/>
+  <rect width="1200" height="300" fill="#0d0d14"/>
+  <rect x="64" y="66" width="8" height="126" rx="4" fill="#BDB2FF"/>
 
-  <rect x="64" y="66" width="10" height="150" rx="5" fill="url(#ladderd)"/>
+  <text class="wordmark" x="104" y="148">Neugier</text>
+  <text class="pron"     x="108" y="182">noy-geer</text>
+  <text class="tag"      x="108" y="228">Curiosity, refereed.</text>
 
-  <text class="wordmark" x="108" y="150">Neugier</text>
-  <text class="pron" x="112" y="186">noy-geer &#183; German for curiosity</text>
-  <text class="tag" x="112" y="232">Curiosity, refereed.</text>
-
-  <g transform="translate(700,74)">
-    <rect x="0"   y="0"  width="188" height="30" rx="15" fill="#6FA8DC" opacity="0.22"/>
-    <text class="chipmut" x="16" y="21">conjectured</text>
-    <rect x="0"   y="40" width="228" height="30" rx="15" fill="#7ED957" opacity="0.24"/>
-    <text class="chipmut" x="16" y="61">numerically-supported</text>
-    <rect x="0"   y="80" width="188" height="30" rx="15" fill="#A3D6FF" opacity="0.30"/>
-    <text class="chipmut" x="16" y="101">proof-drafted</text>
-    <rect x="0"   y="120" width="188" height="30" rx="15" fill="#1CAC78" opacity="0.95"/>
-    <text class="chip" x="16" y="141" fill="#04260f">referee-passed</text>
-    <text class="chipmut" x="204" y="141">&#8592; the paper may assert only this</text>
+  <g transform="translate(780,60)">
+    <rect x="0" y="0"   width="252" height="32" rx="16" fill="#BDB2FF" opacity="0.14"/>
+    <text class="chip"   x="18" y="22">conjectured</text>
+    <rect x="0" y="42"  width="252" height="32" rx="16" fill="#BDB2FF" opacity="0.24"/>
+    <text class="chip"   x="18" y="64">numerically-supported</text>
+    <rect x="0" y="84"  width="252" height="32" rx="16" fill="#BDB2FF" opacity="0.38"/>
+    <text class="chip"   x="18" y="106">proof-drafted</text>
+    <rect x="0" y="126" width="252" height="32" rx="16" fill="#BDB2FF"/>
+    <text class="chipon" x="18" y="148">referee-passed</text>
   </g>
 
-  <g transform="translate(64,286)">
-    <text class="chipmut" x="0"    y="16">scout</text>
-    <path class="arrow" d="M52 11 h22"/>
-    <text class="chipmut" x="82"   y="16">survey</text>
-    <path class="arrow" d="M146 11 h22"/>
-    <text class="chipmut" x="176"  y="16">plan</text>
-    <path class="arrow" d="M218 11 h22"/>
-    <text class="chipmut" x="248"  y="16">explore</text>
-    <path class="arrow" d="M320 11 h22"/>
-    <text class="chipmut" x="350"  y="16">prove</text>
-    <path class="arrow" d="M404 11 h22"/>
-    <text class="chip"   x="434"  y="16">review</text>
-    <path class="arrow" d="M500 11 h22"/>
-    <text class="chipmut" x="530"  y="16">paper</text>
-    <text class="chipmut" x="620"  y="16" fill="#6e7681">&#183; every phase gated by exit criteria</text>
+  <g transform="translate(64,262)">
+    <text class="step"   x="0"   y="6">scout</text>
+    <path class="rule" d="M54 1 h20"/>
+    <text class="step"   x="84"  y="6">survey</text>
+    <path class="rule" d="M150 1 h20"/>
+    <text class="step"   x="180" y="6">plan</text>
+    <path class="rule" d="M224 1 h20"/>
+    <text class="step"   x="254" y="6">explore</text>
+    <path class="rule" d="M330 1 h20"/>
+    <text class="step"   x="360" y="6">prove</text>
+    <path class="rule" d="M416 1 h20"/>
+    <text class="stepon" x="446" y="6">review</text>
+    <path class="rule" d="M516 1 h20"/>
+    <text class="step"   x="546" y="6">paper</text>
   </g>
 </svg>

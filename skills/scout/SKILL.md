@@ -9,8 +9,8 @@ effort: high
 
 `PY` = `.venv/Scripts/python.exe`. Arguments: `$ARGUMENTS`.
 
-1. Ensure a campaign exists and is active (`PY -m harness campaign list` / `create` / `activate`). Set phase `scout` and open the gate
-   (`echo scout > campaigns/<slug>/.gate`).
+1. Ensure a campaign exists and is active (`PY -m harness campaign list` / `create` / `activate`), then
+   `PY -m harness campaign phase <slug> scout --gate` (records the phase and opens the gate owned by this session).
 2. Spawn the `scout` agent with: slug, the area/constraints from the arguments, the rubric path
    `skills/references/goldmine-rubric.md`, the cross-campaign memory (`PY -m harness library list questions`, `... lessons`,
    `... list rejected`, `... list results`), and the instruction to produce `campaigns/<slug>/portfolio.md` in the rubric's §4 format

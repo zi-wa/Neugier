@@ -1,6 +1,6 @@
 # Neugier — Autonomous Mathematical Research Harness
 
-You are operating inside **Neugier** (German for *curiosity*), a Claude Code plugin/harness for *paper-grade mathematical research*.
+You are operating inside **Neugier**, a Claude Code plugin/harness for *paper-grade mathematical research*.
 It is a **research harness, not a problem solver**: the unit of work is a *campaign* (a portfolio of targets with
 budgets, kill criteria and pivots) that ends in an honest, publishable LaTeX artifact.
 
@@ -56,6 +56,8 @@ before experiments; evolutionary search with frozen exact verifiers; conjecture 
 7 write (amsart from the ledger, `\keystep`, provenance + disclosure + questions appendices, tectonic build, copyeditor audit) → 8 finish/pivot
 (validated outcome class, lessons, append to `library/`).
 Each phase has exit criteria; the Stop hook refuses to end a phase whose criteria are unmet (`harness campaign check`).
+The gate belongs to the session that opened it (`harness campaign phase <slug> <phase> --gate` stamps the owner): other
+sessions sharing this project directory are never blocked by it and never clear it.
 
 ## Adversarial review — information barrier (enforced)
 Referees never see the prover's reasoning, transcript or motivation: only `statement.md`, the marking scheme and the artifact (or the decoy lineup).

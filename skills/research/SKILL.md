@@ -23,8 +23,9 @@ You are the campaign orchestrator. Reason in English; report to the user in Kore
 ## Phase loop
 For each phase in order (skip phases already completed on resume), do:
 ```
-PY -m harness campaign phase <slug> <phase>        # record entry (budgets.hours_per_phase are accounted from here)
-echo <phase> > campaigns/<slug>/.gate               # open the gate: the Stop hook will not let the turn end until exit criteria pass
+PY -m harness campaign phase <slug> <phase> --gate  # record entry (budgets are accounted from here) and open the phase gate
+                                                    # --gate stamps the marker with THIS session's id: the Stop hook holds this
+                                                    # session in the phase until the exit criteria pass, and never blocks another session
 ... re-read HUMAN.md; run the phase (below) ...
 PY -m harness campaign check <slug>                 # must print "all criteria met"; read its advisories; otherwise keep working or write blocked.md
 ```

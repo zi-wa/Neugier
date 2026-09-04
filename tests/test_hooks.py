@@ -135,17 +135,18 @@ def test_gate_stop_blocks_when_criteria_unmet(tmp_path, monkeypatch, capsys):
     cdir = tmp_path / "campaigns" / "demo"
     cdir.mkdir(parents=True)
     (tmp_path / "campaigns" / "ACTIVE").write_text("demo", encoding="utf-8")
-    (cdir / ".gate").write_text("scout", encoding="utf-8")
+    (cdir / ".gate").write_text("scout\nowner=S1\n", encoding="utf-8")
     (cdir / "campaign.json").write_text(json.dumps({"phase": "scout"}), encoding="utf-8")
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
     monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
     # simulate the harness check reporting one unmet criterion
     monkeypatch.setattr(gate, "run_harness", lambda root, args, timeout=30: (1, "- portfolio.md missing"))
-    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({"hook_event_name": "Stop", "cwd": str(tmp_path)})))
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(
+        {"hook_event_name": "Stop", "cwd": str(tmp_path), "session_id": "S1"})))
     assert gate.main() == 2
     err = capsys.readouterr().err
     assert "portfolio.md missing" in err and "gate 1/" in err
-    assert (cdir / ".gate_attempts").read_text(encoding="utf-8") == "1"
+    assert (cdir / ".gate_attempts.S1").read_text(encoding="utf-8") == "1"
 
 
 def test_gate_stop_releases_when_criteria_met(tmp_path, monkeypatch):
@@ -167,11 +168,70 @@ def test_gate_stop_gives_up_after_max_blocks(tmp_path, monkeypatch):
     cdir = tmp_path / "campaigns" / "demo"
     cdir.mkdir(parents=True)
     (tmp_path / "campaigns" / "ACTIVE").write_text("demo", encoding="utf-8")
-    (cdir / ".gate").write_text("scout", encoding="utf-8")
-    (cdir / ".gate_attempts").write_text(str(gate.MAX_BLOCKS), encoding="utf-8")
+    (cdir / ".gate").write_text("scout\nowner=S1\n", encoding="utf-8")
+    (cdir / ".gate_attempts.S1").write_text(str(gate.MAX_BLOCKS), encoding="utf-8")
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
     monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
     monkeypatch.setattr(gate, "run_harness", lambda root, args, timeout=30: (1, "- still missing"))
-    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({"hook_event_name": "Stop", "cwd": str(tmp_path)})))
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(
+        {"hook_event_name": "Stop", "cwd": str(tmp_path), "session_id": "S1"})))
     assert gate.main() == 0
     assert (cdir / "blocked.md").exists() and not (cdir / ".gate").exists()
+
+
+def test_gate_stop_ignores_another_sessions_gate(tmp_path, monkeypatch, capsys):
+    """Several Claude Code sessions share one project: a phase opened by S1 must not trap or clobber S2."""
+    gate = _load("gate_stop")
+    cdir = tmp_path / "campaigns" / "demo"
+    cdir.mkdir(parents=True)
+    (tmp_path / "campaigns" / "ACTIVE").write_text("demo", encoding="utf-8")
+    (cdir / ".gate").write_text("scout\nowner=S1\n", encoding="utf-8")
+    (cdir / "campaign.json").write_text(json.dumps({"phase": "scout"}), encoding="utf-8")
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+    called = []
+    monkeypatch.setattr(gate, "run_harness", lambda root, args, timeout=30: called.append(args) or (1, "- unmet"))
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(
+        {"hook_event_name": "Stop", "cwd": str(tmp_path), "session_id": "S2"})))
+    assert gate.main() == 0
+    assert capsys.readouterr().err == ""
+    assert called == []                                   # the foreign session is not even checked
+    assert (cdir / ".gate").exists()                      # and the owner keeps its gate
+    assert not (cdir / "blocked.md").exists()
+
+
+def test_gate_stop_unowned_marker_nudges_once(tmp_path, monkeypatch, capsys):
+    """A legacy marker cannot be attributed: nudge a session once, then leave it and the gate alone."""
+    gate = _load("gate_stop")
+    cdir = tmp_path / "campaigns" / "demo"
+    cdir.mkdir(parents=True)
+    (tmp_path / "campaigns" / "ACTIVE").write_text("demo", encoding="utf-8")
+    (cdir / ".gate").write_text("scout", encoding="utf-8")
+    (cdir / "campaign.json").write_text(json.dumps({"phase": "scout"}), encoding="utf-8")
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+    monkeypatch.setattr(gate, "run_harness", lambda root, args, timeout=30: (1, "- portfolio.md missing"))
+    payload = json.dumps({"hook_event_name": "Stop", "cwd": str(tmp_path), "session_id": "S9"})
+    monkeypatch.setattr(sys, "stdin", io.StringIO(payload))
+    assert gate.main() == 2
+    assert "gate 1/1" in capsys.readouterr().err
+    monkeypatch.setattr(sys, "stdin", io.StringIO(payload))
+    assert gate.main() == 0                               # second attempt: released, nothing destroyed
+    err = capsys.readouterr().err
+    assert "unowned phase gate" in err and "--gate" in err
+    assert (cdir / ".gate").exists() and not (cdir / "blocked.md").exists()
+
+
+def test_open_gate_records_the_session_owner(tmp_path, monkeypatch):
+    """`harness campaign phase <slug> <phase> --gate` stamps the marker with this session's id."""
+    import harness
+    import harness.campaign as C
+    monkeypatch.setattr(harness, "CAMPAIGNS", tmp_path / "campaigns")
+    monkeypatch.setattr(C, "CAMPAIGNS", tmp_path / "campaigns")
+    C.create("demo", title="Demo campaign")
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "SESS-123")
+    (tmp_path / "campaigns" / "demo" / ".gate_attempts.SESS-123").write_text("4", encoding="utf-8")
+    C.set_phase("demo", "scout", gate=True)
+    marker = (tmp_path / "campaigns" / "demo" / ".gate").read_text(encoding="utf-8")
+    assert marker.splitlines() == ["scout", "owner=SESS-123"]
+    assert not list((tmp_path / "campaigns" / "demo").glob(".gate_attempts*"))   # stale counters cleared

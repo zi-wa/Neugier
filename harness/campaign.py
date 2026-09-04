@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -288,7 +289,26 @@ def save(camp: Campaign) -> None:
     atomic_write_json(_campaign_json(camp.slug), camp.model_dump(mode="json"))
 
 
-def set_phase(slug: str, phase: str) -> Campaign:
+def open_gate(slug: str, phase: str, session_id: str | None = None) -> Path:
+    """Write the phase-gate marker owned by this Claude Code session.
+
+    The Stop hook blocks only the owning session: several sessions share one project directory, so an open
+    phase in one session must not trap another. ``session_id`` defaults to ``$CLAUDE_CODE_SESSION_ID``;
+    without it the marker is written unowned (legacy form) and the hook nudges any session only once.
+    """
+    sid = session_id if session_id is not None else os.environ.get("CLAUDE_CODE_SESSION_ID", "")
+    path = _campaign_dir(slug) / ".gate"
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(f"{phase}\n" + (f"owner={sid}\n" if sid else ""))
+    for stale in _campaign_dir(slug).glob(".gate_attempts*"):
+        try:
+            stale.unlink()
+        except OSError:
+            pass
+    return path
+
+
+def set_phase(slug: str, phase: str, *, gate: bool = False, session_id: str | None = None) -> Campaign:
     if phase not in PHASES:
         raise CampaignError(f"unknown phase {phase!r}; must be one of {PHASES}")
     camp = load(slug)
@@ -298,6 +318,8 @@ def set_phase(slug: str, phase: str) -> Campaign:
     camp.phase_history.append({"phase": phase, "entered": now, "exited": None})
     camp.phase = phase
     save(camp)
+    if gate:
+        open_gate(slug, phase, session_id)
     return camp
 
 
@@ -1077,6 +1099,9 @@ def main(argv: list[str] | None = None) -> int:
     p_phase = sub.add_parser("phase")
     p_phase.add_argument("slug")
     p_phase.add_argument("phase", nargs="?", default=None)
+    p_phase.add_argument("--gate", action="store_true",
+                         help="also open the phase gate, owned by this session (the Stop hook then holds "
+                              "this session in the phase until its exit criteria pass)")
 
     p_check = sub.add_parser("check")
     p_check.add_argument("slug")
@@ -1147,8 +1172,8 @@ def main(argv: list[str] | None = None) -> int:
             if args.phase is None:
                 print(load(args.slug).phase)
             else:
-                camp = set_phase(args.slug, args.phase)
-                print(f"{args.slug}: phase -> {camp.phase}")
+                camp = set_phase(args.slug, args.phase, gate=args.gate)
+                print(f"{args.slug}: phase -> {camp.phase}" + (" (gate open)" if args.gate else ""))
             return 0
 
         if args.cmd == "check":

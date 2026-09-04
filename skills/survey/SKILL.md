@@ -7,7 +7,7 @@ effort: high
 
 # /survey — Phase 2
 
-`PY` = `.venv/Scripts/python.exe`. Set phase `survey`; open the gate.
+`PY` = `.venv/Scripts/python.exe`. `PY -m harness campaign phase <slug> survey --gate` (records the phase and opens this session's gate).
 
 1. Spawn `librarian` with: slug, the selected target from `portfolio.md` (or `$ARGUMENTS`), and the deliverables:
    `survey.md` (sections 1–8 of the agent spec), `refs.bib` (≥ 3 entries, all resolved), ≥ 3 ledger facts at

@@ -7,7 +7,7 @@ effort: high
 
 # /paper — Phase 7
 
-`PY` = `.venv/Scripts/python.exe`. Set phase `write`; open the gate.
+`PY` = `.venv/Scripts/python.exe`. `PY -m harness campaign phase <slug> write --gate` (records the phase and opens this session's gate).
 
 1. Confirm what may be asserted: `PY -m harness ledger assertable --campaign <slug>` and
    `PY -m harness ledger graph --campaign <slug> --format mermaid` (only `fully_proved` claims may be plain theorems; `proved` with a

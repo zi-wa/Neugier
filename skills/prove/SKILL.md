@@ -7,7 +7,7 @@ effort: max
 
 # /prove — Phase 5
 
-`PY` = `.venv/Scripts/python.exe`. Set phase `prove`; open the gate. Claim: first token of `$ARGUMENTS` (else the primary target).
+`PY` = `.venv/Scripts/python.exe`. `PY -m harness campaign phase <slug> prove --gate` (records the phase and opens this session's gate). Claim: first token of `$ARGUMENTS` (else the primary target).
 Read `proofs/<ID>.rubric.md` (the pre-registered marking scheme) — it says what a correct proof must establish.
 
 1. Decide the number of parallel provers from the budget (1 for a small lemma; `budgets.sketch_personas` persona lenses for the main

@@ -10,7 +10,7 @@ effort: max
 `PY` = `.venv/Scripts/python.exe`. Target: `$ARGUMENTS`.
 
 ## Setup
-- Inside a campaign: set phase `review`; open the gate; artifact = `proofs/<ID>.md`; round N = 1 + max existing round.
+- Inside a campaign: `PY -m harness campaign phase <slug> review --gate` (phase + this session's gate); artifact = `proofs/<ID>.md`; round N = 1 + max existing round.
 - Standalone (a file path outside a campaign): `PY -m harness campaign create review-<name> --title "standalone review"`,
   copy the file to `proofs/X-001.md`, write a minimal `statement.md` from the artifact's header (no conventions invented — if
   the statement is ambiguous, say so in the report), add claim `X-001` to the ledger with the proof as evidence.

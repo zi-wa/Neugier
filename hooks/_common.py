@@ -332,6 +332,32 @@ def verdict_block_min(text: str) -> dict | None:
     return out or None
 
 
+def read_gate(path: Path) -> tuple[str, str | None]:
+    """Parse a phase-gate marker: line 1 is the phase, an optional ``owner=<session id>`` line says
+    which Claude Code session opened it. Legacy markers (phase only) have no owner."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception:
+        return "", None
+    phase, owner = "", None
+    for i, line in enumerate(text.splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        if line.lower().startswith("owner="):
+            owner = line.split("=", 1)[1].strip() or None
+        elif i == 0 or not phase:
+            phase = line
+    return phase, owner
+
+
+def session_slug(session_id: str) -> str:
+    """Filesystem-safe short form of a session id (for per-session counter files)."""
+    keep = "".join(ch for ch in str(session_id) if ch.isalnum() or ch in "-_")
+    return keep[:40] or "anon"
+
+
+
 def verdict_block_looks_valid_min(block: dict | None, role: str | None = None) -> bool:
     if not block or not block.get("role") or not block.get("claim") or not block.get("verdict"):
         return False

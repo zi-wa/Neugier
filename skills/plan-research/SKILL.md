@@ -7,7 +7,7 @@ effort: xhigh
 
 # /plan-research — Phase 3
 
-`PY` = `.venv/Scripts/python.exe`. Set phase `plan`; open the gate.
+`PY` = `.venv/Scripts/python.exe`. `PY -m harness campaign phase <slug> plan --gate` (records the phase and opens this session's gate).
 
 1. Spawn `strategist` with: slug, `portfolio.md`, `survey.md`, `questions.md`, `skills/references/creative-moves.md`,
    `skills/references/technique-pitfalls.md`, the outputs of `PY -m harness library lessons --query "<topic>"` and
