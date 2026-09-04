@@ -84,6 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_promote = sub.add_parser("promote", help="promote/demote a claim's status")
     p_promote.add_argument("id")
     p_promote.add_argument("status")
+    p_promote.add_argument("--no-lint", action="store_true", help="skip the proof-artifact linter when promoting to proof-drafted")
 
     p_update = sub.add_parser("update", help="edit a claim's statement and/or stakes")
     p_update.add_argument("id")
@@ -195,6 +196,16 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.cmd == "promote":
+            if args.status == "proof-drafted" and not args.no_lint:
+                from harness.proof.lint import lint_claim_proofs
+
+                failed = [r for r in lint_claim_proofs(store, campaign_dir, args.id) if not r.ok]
+                if failed:
+                    for r in failed:
+                        print(f"proof check FAILED for {r.path}:", file=sys.stderr)
+                        for e in r.errors:
+                            print(f"  [ERROR {e.code}] {e.message}", file=sys.stderr)
+                    raise LedgerError(f"cannot promote {args.id} to proof-drafted: the proof artifact fails `harness proof check`")
             claim = store.promote(args.id, args.status, campaign_dir)
             _print_json(claim)
             return 0

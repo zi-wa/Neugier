@@ -663,6 +663,16 @@ def check_phase_exit(slug: str) -> list[str]:
                 break
         if not ok:
             unmet.append("no claim with status >= proof-drafted has a proof evidence file that still exists")
+        from harness.proof.lint import lint_claim_proofs
+
+        for c in store.ledger.claims.values():
+            rank = pipeline_rank(c.status)
+            if rank is None or rank < proof_rank:
+                continue
+            for report in lint_claim_proofs(store, campaign_dir, c.id):
+                if not report.ok:
+                    codes = sorted({e.code for e in report.errors})
+                    unmet.append(f"proof artifact {report.path} fails `harness proof check`: {', '.join(codes)}")
         from harness.questions import load_doc, unanswered_by
 
         open_prover = [q.id for q in unanswered_by(load_doc(campaign_dir), "prover")]
