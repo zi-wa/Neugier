@@ -16,6 +16,7 @@ COMMANDS = {
     "questions": ("harness.questions", "curiosity engine: rank open questions, log surprises/detours, escalate to humans"),
     "review": ("harness.review.cli", "review rounds: barrier manifests, blind commits, lineups, round checks"),
     "proof": ("harness.proof.cli", "proof-artifact linter (proof-standards.md) and coverage"),
+    "ideas": ("harness.ideas", "attack routes in ideas.md: list, near-duplicate detection, proximity graph"),
 }
 
 

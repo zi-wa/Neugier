@@ -912,9 +912,10 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.cmd == "check":
             unmet = check_phase_exit(args.slug)
+            from harness.ideas import advisories as route_advisories
             from harness.questions import advisories
 
-            for a in advisories(_campaign_dir(args.slug)):
+            for a in advisories(_campaign_dir(args.slug)) + route_advisories(_campaign_dir(args.slug)):
                 print(f"advisory: {a}", file=sys.stderr)
             if unmet:
                 for m in unmet:
