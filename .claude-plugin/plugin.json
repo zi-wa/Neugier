@@ -1,0 +1,11 @@
+{
+  "name": "neugier",
+  "displayName": "Neugier - Mathematical Research Harness",
+  "version": "0.2.0",
+  "description": "Autonomous paper-grade mathematical research: goldmine topic scouting, excerpt-anchored literature survey, interpretation-locked planning, falsification-first experiments with exact verifiers, proof development, adversarial review behind an information barrier, and a ledger-constrained LaTeX paper.",
+  "author": { "name": "Neugier contributors" },
+  "license": "MIT",
+  "skills": "./skills",
+  "agents": "./agents",
+  "hooks": "./hooks/hooks.json"
+}

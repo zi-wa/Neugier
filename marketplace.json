@@ -1,0 +1,14 @@
+{
+  "name": "neugier-marketplace",
+  "owner": { "name": "Neugier contributors" },
+  "plugins": [
+    {
+      "name": "neugier",
+      "description": "Autonomous mathematical research harness (scout -> survey -> plan -> explore -> prove -> adversarial review -> LaTeX paper).",
+      "version": "0.2.0",
+      "source": { "source": "github", "repo": "zi-wa/Neugier" },
+      "category": "research",
+      "tags": ["math", "research", "latex", "verification"]
+    }
+  ]
+}

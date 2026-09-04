@@ -1,0 +1,72 @@
+\documentclass[11pt]{amsart}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{conjecture}[theorem]{Conjecture}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{question}[theorem]{Question}
+
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\claim}[1]{}
+\newcommand{\keystep}[1]{\par\noindent\colorbox{yellow!20}{\parbox{\dimexpr\linewidth-2\fboxsep}{\textbf{Key new step.} #1}}\par}
+\newcommand{\numref}[1]{\texttt{#1}}
+\newcommand{\assumes}[1]{\textbf{Assumption:} #1}
+
+\title{A Tiny Example Paper}
+\author{Neugier Test Suite}
+\date{\today}
+
+\begin{document}
+
+\begin{abstract}
+This is a minimal example paper used only to smoke-test the Neugier
+LaTeX toolchain (\texttt{harness/paper/build.py}). It compiles a single
+theorem with a proof and one bibliography entry~\cite{example2024}.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+
+We record a trivial fact about the widget count $\numref{widget-count}$,
+following the convention of \cite{example2024}.
+
+\begin{theorem}\claim{T-EXAMPLE}\label{thm:main}
+For every widget $w$, we have $w = w$.
+\end{theorem}
+
+\begin{proof}
+\keystep{The proof is immediate from the reflexivity of equality.}
+This holds trivially by reflexivity of $=$.
+\end{proof}
+
+See Theorem~\ref{thm:main} above.
+
+\section{Computational details and reproducibility}
+
+\subsection{Tools disclosure}
+No computation beyond reflexivity was required for this example.
+
+\bibliographystyle{amsplain}
+\bibliography{refs}
+
+\end{document}

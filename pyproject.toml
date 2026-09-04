@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neugier-harness"
+version = "0.2.0"
+description = "Neugier: autonomous mathematical research harness (Claude Code plugin runtime)"
+requires-python = ">=3.11"
+dependencies = []  # runtime deps are pinned in requirements.txt (installed into .venv by scripts/bootstrap.*)
+
+[project.scripts]
+harness = "harness.cli:main"
+neugier = "harness.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["harness*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+timeout = 300
+markers = ["live: hits live network APIs (deselect with -m 'not live')"]

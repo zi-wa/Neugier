@@ -1,0 +1,74 @@
+\documentclass[11pt]{amsart}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+
+% --------------------------------------------------------------------------
+% Theorem-like environments
+% --------------------------------------------------------------------------
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{conjecture}[theorem]{Conjecture}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{question}[theorem]{Question}
+
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% --------------------------------------------------------------------------
+% Neugier macros
+% --------------------------------------------------------------------------
+% \claim{ID}: invisible binding of the enclosing theorem-like environment to
+% a claim ID in campaigns/<slug>/ledger.json. Must be the first token inside
+% the environment, e.g. \begin{theorem}\claim{T-001} ... \end{theorem}.
+% harness/paper/check.py greps for this macro; it has no visual effect.
+\newcommand{\claim}[1]{}
+
+% \keystep{...}: visibly flags the genuinely new argument in a proof.
+\newcommand{\keystep}[1]{\par\noindent\colorbox{yellow!20}{\parbox{\dimexpr\linewidth-2\fboxsep}{\textbf{Key new step.} #1}}\par}
+
+% \numref{key}: reference a computed quantity by its experiments/results.json key.
+\newcommand{\numref}[1]{\texttt{#1}}
+
+% \assumes{...}: flags a standing assumption explicitly.
+\newcommand{\assumes}[1]{\textbf{Assumption:} #1}
+
+\title{{{TITLE}}}
+\author{{{AUTHOR}}}
+\date{{{DATE}}}
+
+\begin{document}
+
+\begin{abstract}
+{{ABSTRACT}}
+\end{abstract}
+
+\maketitle
+
+{{BODY}}
+
+\section{Computational details and reproducibility}
+
+\subsection{Tools disclosure}
+{{TOOLS}}
+
+\IfFileExists{appendix-repro.tex}{\input{appendix-repro}}{}
+
+\bibliographystyle{amsplain}
+\bibliography{refs}
+
+\end{document}

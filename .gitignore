@@ -1,0 +1,34 @@
+# environments / caches (project-local by design)
+.venv/
+.cache/
+bin/*.exe
+bin/*.dll
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# campaign bulk data
+campaigns/*/cache/
+campaigns/*/experiments/**/data/
+campaigns/*/paper/build/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.toc
+*.out
+
+# OS / editor
+Thumbs.db
+.DS_Store
+*.swp
+
+# project-local junctions to ../agents and ../skills (recreated by scripts/bootstrap.*)
+.claude/agents/
+.claude/skills/

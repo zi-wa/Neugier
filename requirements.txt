@@ -1,0 +1,19 @@
+# Neugier harness runtime (installed into .venv only)
+numpy
+scipy
+sympy
+mpmath
+gmpy2
+networkx
+python-sat
+z3-solver
+ortools
+matplotlib
+pymupdf
+bibtexparser
+requests
+pydantic>=2
+pyyaml
+tqdm
+pytest
+pytest-timeout
