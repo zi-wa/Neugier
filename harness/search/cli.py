@@ -16,6 +16,8 @@ def _load(args: argparse.Namespace) -> tuple[Path, evolve.EvolveConfig]:
     if not cfg_path.is_absolute():
         cfg_path = cdir / cfg_path
     cfg = evolve.EvolveConfig.model_validate_json(cfg_path.read_text(encoding="utf-8"))
+    if getattr(args, "version", None):
+        cfg = cfg.model_copy(update={"version": args.version})
     return cdir, cfg
 
 
@@ -32,15 +34,23 @@ def build_parser() -> argparse.ArgumentParser:
         g.add_argument("--campaign", help="campaign slug")
         g.add_argument("--dir", help="campaign directory (alternative to --campaign)")
         sp.add_argument("--config", required=True, help="config JSON (relative to the campaign dir or absolute)")
+        sp.add_argument("--version", default=None, help="versioned run name suffix (<name>-v<version>)")
 
-    s = sub.add_parser("init", help="hash the evaluator and seed the population"); common(s)
-    s.add_argument("--force", action="store_true", help="discard an existing population")
-    s = sub.add_parser("next", help="reserve children and write a proposal request for mutator agents"); common(s)
+    s = sub.add_parser("init", help="hash and freeze the evaluator, seed the population (refuses to re-init)"); common(s)
+    s.add_argument("--new-version", default=None, help="start a new versioned run instead of touching the existing one")
+    s = sub.add_parser("next", help="reserve children (retry slots first) and write a proposal request for mutator agents"); common(s)
     s.add_argument("--n", type=int); s.add_argument("--seed", type=int)
-    s = sub.add_parser("score", help="evaluate pending children and update elites"); common(s)
-    s = sub.add_parser("status", help="best score, elites, history"); common(s)
-    s = sub.add_parser("run", help="headless loop using `claude -p` as the mutation operator"); common(s)
+    s = sub.add_parser("score", help="reject near-duplicates, evaluate pending children (cascade first), update elites"); common(s)
+    s = sub.add_parser("status", help="best score, elites, exactness, history"); common(s)
+    s = sub.add_parser("run", help="headless loop using `claude -p` as the mutation operator (no shell; Read/Write only)"); common(s)
     s.add_argument("--generations", type=int, default=5); s.add_argument("--model", default="sonnet")
+    s.add_argument("--permission-mode", default="acceptEdits"); s.add_argument("--max-turns", type=int, default=12)
+    s = sub.add_parser("checkpoint", help="copy population/meta to checkpoints/gen<N>/"); common(s)
+    s = sub.add_parser("resume", help="restore the latest (or --from N) checkpoint"); common(s)
+    s.add_argument("--from", dest="from_gen", type=int, default=None)
+    s = sub.add_parser("mine", help="write mine.md: elite code, features, artifacts, OEIS lookups"); common(s)
+    s.add_argument("--top", type=int, default=5); s.add_argument("--no-oeis", action="store_true")
+    s = sub.add_parser("meta-request", help="write meta_request.json for a meta-recommendation agent"); common(s)
     s = sub.add_parser("template", help="write an example config + evaluator + seed into DIR")
     s.add_argument("dir")
     return p
@@ -69,7 +79,7 @@ def evaluate(program_path):
             sums.add(a + b)
     return {"score": str(len(S)), "valid": True, "exact": True,
             "features": {"density": len(S) / N, "maxgap": max((b - a for a, b in zip(S, S[1:])), default=0) / N},
-            "artifacts": f"size={len(S)} min={S[0] if S else None} max={S[-1] if S else None}"}
+            "artifacts": f"size={len(S)} min={S[0] if S else None} max={S[-1] if S else None} elements={','.join(map(str, S[:12]))}"}
 '''
 
 TEMPLATE_SEED = '''"""Seed program: greedy Sidon set. Mutators edit this file's logic (keep `construct(N)`)."""
@@ -101,17 +111,25 @@ def main(argv: list[str] | None = None) -> int:
     cdir, cfg = _load(ns)
     try:
         if ns.cmd == "init":
-            st = evolve.init(cdir, cfg, force=ns.force)
-            _out(evolve.status(cdir, cfg) | {"seeded": len(st.programs)})
+            st = evolve.init(cdir, cfg, new_version=ns.new_version)
+            _out(evolve.status(cdir, st.config) | {"seeded": len(st.programs)})
         elif ns.cmd == "next":
-            req = evolve.next_generation(cdir, cfg, n=ns.n, seed=ns.seed)
-            _out(req)
+            _out(evolve.next_generation(cdir, cfg, n=ns.n, seed=ns.seed))
         elif ns.cmd == "score":
             _out(evolve.score_pending(cdir, cfg))
         elif ns.cmd == "status":
             _out(evolve.status(cdir, cfg))
         elif ns.cmd == "run":
-            _out(evolve.run_headless(cdir, cfg, ns.generations, model=ns.model))
+            _out(evolve.run_headless(cdir, cfg, ns.generations, model=ns.model, max_turns=ns.max_turns,
+                                     permission_mode=ns.permission_mode))
+        elif ns.cmd == "checkpoint":
+            _out({"checkpoint": str(evolve.checkpoint(cdir, cfg))})
+        elif ns.cmd == "resume":
+            _out(evolve.resume(cdir, cfg, ns.from_gen))
+        elif ns.cmd == "mine":
+            _out({"wrote": str(evolve.mine(cdir, cfg, top=ns.top, oeis=not ns.no_oeis))})
+        elif ns.cmd == "meta-request":
+            _out({"wrote": str(evolve.write_meta_request(evolve.EvolveStore.load(cdir, cfg)))})
     except RuntimeError as e:
         sys.stderr.write(f"[evolve] {e}\n")
         return 1
