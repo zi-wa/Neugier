@@ -37,6 +37,7 @@ _STORE_FILES = {
     "facts": "facts.jsonl",
     "questions": "questions.jsonl",
     "calibration": "calibration.jsonl",
+    "lemmas": "lemmas.jsonl",
 }
 
 
@@ -201,6 +202,41 @@ def add_open_questions(campaign: str, questions: list[dict[str, Any]], date: str
         existing.add(key)
         n += 1
     return n
+
+
+def add_lemma(statement: str, status: str, campaign: str, claim_id: str, proof_path: str | None = None,
+              technique: list[str] | None = None, date: str | None = None) -> dict[str, Any] | None:
+    """Append a proved lemma to the lemma bank (goal cache), deduped on (normalized hash, campaign, status)."""
+    h = sha256_text(_normalize(statement))
+    for existing in all("lemmas"):
+        if existing.get("normalized_hash") == h and existing.get("campaign") == campaign and existing.get("status") == status:
+            return None
+    record = {
+        "statement": statement, "normalized_hash": h, "status": status, "campaign": campaign, "claim_id": claim_id,
+        "proof_path": proof_path, "technique": list(technique or []), "date": date or _utc_now_iso(),
+    }
+    _append("lemmas", record)
+    return record
+
+
+def find_lemma(statement: str, threshold: float = 0.8) -> list[dict[str, Any]]:
+    """Lemmas in the bank matching ``statement`` by normalized hash or TF-IDF cosine ≥ threshold."""
+    from harness.text.similarity import most_similar
+
+    rows = all("lemmas")
+    if not rows:
+        return []
+    h = sha256_text(_normalize(statement))
+    out: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for i, r in enumerate(rows):
+        if r.get("normalized_hash") == h:
+            out.append({"record": r, "score": 1.0, "match": "hash"})
+            seen.add(i)
+    for idx, score in most_similar(statement, [r.get("statement", "") for r in rows], k=5):
+        if idx not in seen and score >= threshold:
+            out.append({"record": rows[idx], "score": score, "match": "tfidf"})
+    return out
 
 
 def add_calibration(campaign: str, role: str, field: str, n: int, brier: float, mean_p: float, base_rate: float,

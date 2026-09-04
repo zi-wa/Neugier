@@ -25,6 +25,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--max-instances", type=int, default=1_000_000)
     p_run.add_argument("--seed", type=int, default=0)
     p_run.add_argument("--out", type=Path, default=None, help="write the report JSON to this path too")
+    p_run.add_argument("--regression", type=Path, default=None, help="JSON list of instance reprs that must all satisfy the predicate (truth test)")
+    p_run.add_argument("--no-touch", action="store_true", help="skip the touch-number (equality cases) pass")
 
     p_id = sub.add_parser("identity", help="random-sample check that two expressions are numerically equal")
     p_id.add_argument("lhs")
@@ -56,6 +58,8 @@ def main(argv: list[str] | None = None) -> int:
                 max_instances=ns.max_instances,
                 seed=ns.seed,
                 out_json=ns.out,
+                regression_path=ns.regression,
+                touch=not ns.no_touch,
             )
         except Exception as e:
             print(json.dumps({"error": f"{type(e).__name__}: {e}"}, ensure_ascii=False), file=sys.stderr)
@@ -63,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
         print(report.model_dump_json(indent=2))
         if report.error:
             return 1
-        if report.counterexample_repr is not None:
+        if report.counterexample_repr is not None or report.regression_failures:
             return 3
         return 0
 

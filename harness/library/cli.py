@@ -46,16 +46,20 @@ def build_parser() -> argparse.ArgumentParser:
                    help="record the fact even if the excerpt is not found in a cached source (stored as unverified)")
 
     s = sub.add_parser("search", help="search a store")
-    s.add_argument("store", choices=["rejected", "results", "facts", "questions"])
+    s.add_argument("store", choices=["rejected", "results", "facts", "questions", "calibration", "lemmas"])
     s.add_argument("query")
     s.add_argument("--limit", type=int, default=20)
 
     ls = sub.add_parser("list", help="dump a store")
-    ls.add_argument("store", choices=["rejected", "results", "facts", "questions"])
+    ls.add_argument("store", choices=["rejected", "results", "facts", "questions", "calibration", "lemmas"])
 
     c = sub.add_parser("check-rejected", help="fuzzy-check whether a topic was already rejected")
     c.add_argument("topic")
     c.add_argument("--threshold", type=float, default=0.8)
+
+    fl = sub.add_parser("find-lemma", help="look up the lemma bank before proving a lemma (exit 3 on a hit)")
+    fl.add_argument("statement")
+    fl.add_argument("--threshold", type=float, default=0.8)
     return p
 
 
@@ -87,6 +91,10 @@ def main(argv: list[str] | None = None) -> int:
         hit = memory.is_rejected(ns.topic, threshold=ns.threshold)
         _print_json(hit if hit is not None else {"rejected": False})
         return 3 if hit is not None else 0
+    elif ns.cmd == "find-lemma":
+        hits = memory.find_lemma(ns.statement, threshold=ns.threshold)
+        _print_json(hits)
+        return 3 if hits else 0
     return 0
 
 

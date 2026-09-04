@@ -43,6 +43,20 @@ describe(x) -> str
     Human-readable rendering of `x`, used for the report's `counterexample`
     field (e.g. "n=5: F_5 = 4294967297 = 641 * 6700417"). Without it,
     `repr(x)` is used.
+
+features(x) -> dict
+    Structural features of an instance (size, parity, symmetry, ...). Recorded
+    for counterexamples so `harness ledger repair` can propose an added
+    hypothesis (Round-2 X3).
+
+equality(x) -> bool
+    True when the conjectured inequality is tight on `x`. The count of such
+    instances is the report's `touch_number` (sharpness); a repaired bound
+    needs `touch_number >= 1`.
+
+parse(s) -> instance
+    Inverse of `repr`, used to re-check regression sets (`--regression`).
+    Without it `ast.literal_eval(s)` is used.
 """
 from __future__ import annotations
 

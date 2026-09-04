@@ -641,6 +641,10 @@ class LedgerStore:
         if new_status == "numerically-supported":
             if not self._has_evidence(claim, {"computation", "falsification"}, require_path=True, campaign_dir=campaign_dir):
                 missing.append("requires >=1 evidence of type 'computation' or 'falsification' with an existing path")
+            if claim.repaired_from:
+                from harness.ledger.repair import repair_requirements  # lazy: repair imports this module
+
+                missing.extend(repair_requirements(self, claim, campaign_dir))
             return missing
 
         if new_status == "proof-drafted":
@@ -760,7 +764,42 @@ class LedgerStore:
             self._cascade_refutation(claim_id)
 
         self.save()
+        if not is_demotion and claim.kind in ("lemma", "proposition", "theorem") and (new_rank or -1) >= pipeline_rank("proof-drafted"):
+            self._bank_lemma(claim)
         return claim
+
+    def _bank_lemma(self, claim: Claim) -> None:
+        """Record a proved lemma in library/lemmas.jsonl (goal cache across campaigns; never blocks promotion)."""
+        try:
+            from harness.library import memory
+
+            proof = next((ev.path for ev in claim.evidence if ev.type == "proof" and ev.path), None)
+            technique = [t.split(":", 1)[1] for t in claim.tags if t.startswith("technique:")]
+            memory.add_lemma(claim.statement, claim.status, self.ledger.campaign, claim.id, proof, technique)
+        except Exception:  # noqa: BLE001 - library problems must never block the ledger
+            pass
+
+    def near_duplicates(self, statement: str, threshold: float = 0.8) -> list[dict]:
+        """Claims in this ledger and lemmas in the library that look like ``statement`` (Round-2 Y7)."""
+        from harness.text.similarity import most_similar
+
+        hits: list[dict] = []
+        items = [(c.id, c.statement) for c in self.ledger.claims.values()]
+        if items:
+            for idx, score in most_similar(statement, [s for _, s in items], k=3):
+                if score >= threshold and normalize_statement(items[idx][1]) != normalize_statement(statement):
+                    hits.append({"where": "ledger", "id": items[idx][0], "score": score, "statement": items[idx][1]})
+                elif normalize_statement(items[idx][1]) == normalize_statement(statement):
+                    hits.append({"where": "ledger", "id": items[idx][0], "score": 1.0, "statement": items[idx][1]})
+        try:
+            from harness.library import memory
+
+            for rec in memory.find_lemma(statement, threshold):
+                hits.append({"where": "library", "id": f"{rec['record'].get('campaign')}:{rec['record'].get('claim_id')}",
+                             "score": rec["score"], "statement": rec["record"].get("statement", "")})
+        except Exception:  # noqa: BLE001
+            pass
+        return hits
 
     # ---------------------------------------------------------------- reverify --
 

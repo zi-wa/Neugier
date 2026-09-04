@@ -104,6 +104,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_cred.add_argument("--round", type=int, default=None)
     p_cred.add_argument("--panel", default=None, help="persona credences, e.g. skeptic=0.2,optimist=0.6,base-rate=0.3")
 
+    p_rep = sub.add_parser("repair", help="build a counterexample-guided repair request for a refuted claim")
+    p_rep.add_argument("id")
+
     p_cal = sub.add_parser("calibration", help="Brier scores of pre-registered credences against resolved claims")
     p_cal.add_argument("--final", action="store_true", help="treat unresolved claims as not reached within budget and append to library/calibration.jsonl")
 
@@ -157,6 +160,10 @@ def main(argv: list[str] | None = None) -> int:
         store = LedgerStore(ledger_path, campaign=args.campaign)
 
         if args.cmd == "add":
+            if args.kind in ("lemma", "proposition", "theorem", "conjecture", "target"):
+                for hit in store.near_duplicates(args.statement):
+                    print(f"[ledger] near-duplicate ({hit['where']} {hit['id']}, similarity {hit['score']}): {hit['statement'][:100]}",
+                          file=sys.stderr)
             evidence = None
             excerpt = _read_excerpt(args)
             if args.source_id or excerpt:
@@ -250,6 +257,14 @@ def main(argv: list[str] | None = None) -> int:
             entry = store.record_credence(args.id, role=args.role, why=args.why, p_true=args.p_true, p_budget=args.p_budget,
                                           p_pass=args.p_pass, round=args.round, panel=panel)
             _print_json(entry)
+            return 0
+
+        if args.cmd == "repair":
+            from harness.ledger.repair import build_request
+
+            request = build_request(store, args.id, campaign_dir)
+            _print_json(request)
+            print(f"repair request written to experiments/repair/{args.id}.json", file=sys.stderr)
             return 0
 
         if args.cmd == "calibration":

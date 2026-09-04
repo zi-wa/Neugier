@@ -15,6 +15,18 @@ defines:
   conjecture; used by hillclimb to pick which neighbor to move to.
 * ``describe(x) -> str`` -- optional, human-readable rendering of ``x`` for
   reports (``repr(x)`` is used otherwise).
+* ``features(x) -> dict`` -- optional (Round-2 X3), structural features of an
+  instance (size, parity, symmetry, ...) recorded for counterexamples so a
+  refuted conjecture can be *repaired* by adding a hypothesis.
+* ``equality(x) -> bool`` -- optional (Round-2 X3), True when the conjectured
+  inequality holds with equality on ``x``; the number of such instances found
+  is the *touch number* (The Optimist, arXiv 2411.09158), a sharpness score.
+* ``parse(s: str) -> instance`` -- optional, inverse of ``repr`` for regression
+  sets (``ast.literal_eval`` is used otherwise).
+
+Regression sets: ``run(..., regression_path=...)`` first re-checks every
+instance listed in that JSON file (the counterexamples of the parent
+conjecture); a repaired conjecture must survive them (*truth test*).
 
 See ``harness/verify/template_conjecture.py`` for a commented skeleton and
 ``harness/verify/examples/`` for two worked examples.
@@ -44,6 +56,12 @@ class FalsificationReport(BaseModel):
     seconds: float
     exhausted: bool
     error: str | None = None
+    # Round-2 X3 (conjecture repair)
+    regression_set: list[str] = []
+    regression_failures: list[str] = []
+    touch_number: int | None = None
+    touch_examples: list[str] = []
+    features: dict | None = None
 
 
 def _load_module(module_path: Path):
@@ -148,6 +166,97 @@ def _run_hillclimb(mod: Any, rng: random.Random, deadline: float, max_instances:
     return tested, None, False
 
 
+def _parse_instance(mod: Any, s: str) -> Any:
+    if hasattr(mod, "parse"):
+        return mod.parse(s)
+    import ast
+
+    return ast.literal_eval(s)
+
+
+def _check_regression(mod: Any, regression_path: Path | None) -> tuple[list[str], list[str], Any | None, str | None]:
+    """Re-check the regression set: ``(reprs, failing reprs, first counterexample, error)``."""
+    if regression_path is None:
+        return [], [], None, None
+    import json
+
+    try:
+        with open(regression_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError) as e:
+        return [], [], None, f"regression file unreadable: {e}"
+    reprs = [str(r) for r in (data.get("instances", data) if isinstance(data, dict) else data)]
+    failures: list[str] = []
+    first: Any | None = None
+    error: str | None = None
+    for r in reprs:
+        try:
+            x = _parse_instance(mod, r)
+        except Exception as e:  # noqa: BLE001
+            error = f"regression instance {r!r} could not be parsed: {type(e).__name__}: {e}"
+            failures.append(r)
+            continue
+        try:
+            ok = mod.predicate(x)
+        except Exception as e:  # noqa: BLE001
+            error = f"predicate failed on regression instance {r!r}: {type(e).__name__}: {e}"
+            failures.append(r)
+            continue
+        if not ok:
+            failures.append(r)
+            if first is None:
+                first = x
+    return reprs, failures, first, error
+
+
+def _touch(mod: Any, rng: random.Random, deadline: float, max_instances: int) -> tuple[int, list[str]]:
+    """Count instances on which ``mod.equality`` holds (sharpness), within the budget."""
+    if not hasattr(mod, "equality"):
+        return 0, []
+    count = 0
+    examples: list[str] = []
+    tested = 0
+
+    def _consider(x: Any) -> None:
+        nonlocal count
+        try:
+            if mod.equality(x):
+                count += 1
+                if len(examples) < 5:
+                    examples.append(mod.describe(x) if hasattr(mod, "describe") else repr(x))
+        except Exception:  # noqa: BLE001
+            pass
+
+    if hasattr(mod, "space"):
+        try:
+            for x in mod.space():
+                if tested >= max_instances or time.monotonic() >= deadline:
+                    break
+                tested += 1
+                _consider(x)
+            return count, examples
+        except Exception:  # noqa: BLE001
+            pass
+    if hasattr(mod, "sample"):
+        while tested < max_instances and time.monotonic() < deadline:
+            tested += 1
+            try:
+                _consider(mod.sample(rng))
+            except Exception:  # noqa: BLE001
+                continue
+    return count, examples
+
+
+def _features(mod: Any, x: Any) -> dict | None:
+    if not hasattr(mod, "features"):
+        return None
+    try:
+        feats = mod.features(x)
+        return dict(feats) if isinstance(feats, dict) else {"features": repr(feats)}
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _maybe_write(report: FalsificationReport, out_json: Path | None) -> None:
     if out_json is None:
         return
@@ -164,6 +273,8 @@ def run(
     max_instances: int = 1_000_000,
     seed: int = 0,
     out_json: Path | None = None,
+    regression_path: Path | None = None,
+    touch: bool = True,
 ) -> FalsificationReport:
     """Falsify the conjecture defined in ``module_path``.
 
@@ -203,9 +314,16 @@ def run(
         _maybe_write(report, out_json)
         return report
 
+    regression_set: list[str] = []
+    regression_failures: list[str] = []
     if not hasattr(mod, "predicate"):
         error_msg = "conjecture module has no predicate(x) function"
     else:
+        regression_set, regression_failures, reg_cx, reg_err = _check_regression(mod, regression_path)
+        if reg_err:
+            error_msg = reg_err
+        if reg_cx is not None:
+            counterexample_x = reg_cx
         has_space = hasattr(mod, "space")
         has_sample = hasattr(mod, "sample")
         has_neighbors = hasattr(mod, "neighbors")
@@ -229,6 +347,8 @@ def run(
         try:
             for strat in strategies_to_run:
                 if counterexample_x is not None:
+                    break
+                if regression_failures:
                     break
                 if time.monotonic() >= deadline:
                     break
@@ -271,6 +391,12 @@ def run(
             counterexample_str = repr(counterexample_x)
         counterexample_repr = repr(counterexample_x)
 
+    touch_number: int | None = None
+    touch_examples: list[str] = []
+    if touch and counterexample_x is None and hasattr(mod, "predicate") and hasattr(mod, "equality"):
+        touch_deadline = time.monotonic() + max(0.5, 0.1 * time_limit)
+        touch_number, touch_examples = _touch(mod, rng, touch_deadline, max(1000, max_instances // 10))
+
     seconds = time.monotonic() - start
     report = FalsificationReport(
         conjecture=conjecture_name,
@@ -282,6 +408,11 @@ def run(
         seconds=seconds,
         exhausted=bool(exhausted and counterexample_x is None),
         error=error_msg,
+        regression_set=regression_set,
+        regression_failures=regression_failures,
+        touch_number=touch_number,
+        touch_examples=touch_examples,
+        features=_features(mod, counterexample_x) if counterexample_x is not None else None,
     )
     _maybe_write(report, out_json)
     return report
