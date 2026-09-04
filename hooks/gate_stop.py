@@ -63,13 +63,14 @@ def main() -> int:
     unmet = "\n".join(ln for ln in out.splitlines() if ln.strip())
     if n > limit:
         if not owner:
-            # Unowned marker: we cannot tell whether this session opened the phase, so stop blocking it
-            # and leave the gate for whoever owns it.
-            _unlink(counter)
-            sys.stderr.write(
-                f"[Neugier gate] campaign '{slug}' has an unowned phase gate; not blocking this session again. "
-                f"If this session owns the phase, re-open the gate with `harness campaign phase {slug} <phase> --gate`.\n"
-            )
+            # Unowned marker: we cannot tell whether this session opened the phase, so stop blocking this
+            # session and leave the gate for whoever owns it. The counter stays: it is the record that this
+            # session was already nudged, so later turns are released silently instead of re-arming.
+            if n == limit + 1:
+                sys.stderr.write(
+                    f"[Neugier gate] campaign '{slug}' has an unowned phase gate; not blocking this session again. "
+                    f"If this session owns the phase, re-open the gate with `harness campaign phase {slug} <phase> --gate`.\n"
+                )
             return 0
         stamp = time.strftime("%Y-%m-%d %H:%M:%S")
         (cdir / "blocked.md").write_text(

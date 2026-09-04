@@ -220,6 +220,10 @@ def test_gate_stop_unowned_marker_nudges_once(tmp_path, monkeypatch, capsys):
     err = capsys.readouterr().err
     assert "unowned phase gate" in err and "--gate" in err
     assert (cdir / ".gate").exists() and not (cdir / "blocked.md").exists()
+    # and it stays released: the nudge must not re-arm on every later turn
+    monkeypatch.setattr(sys, "stdin", io.StringIO(payload))
+    assert gate.main() == 0
+    assert capsys.readouterr().err == ""
 
 
 def test_open_gate_records_the_session_owner(tmp_path, monkeypatch):
