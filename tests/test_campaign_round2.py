@@ -15,6 +15,7 @@ from harness.ledger.schema import Evidence
 from harness.library import memory
 
 ROLES = ("skeptic", "falsifier", "novelty", "replicator", "judge")
+PRED = "## Prediction: small cases\n- Predicted: 3\n- Observed: 3\n- Surprise: 1/3\n"
 
 
 @pytest.fixture(autouse=True)
@@ -78,6 +79,7 @@ def test_phase_hours_and_overrun_gate():
     assert report["phases"]["explore"]["over"] is True and report["phases"]["explore"]["spent_hours"] >= 2.9
     store = LedgerStore(path / "ledger.json", campaign="demo")
     _write(path / "experiments" / "results.json", "{}")
+    _write(path / "questions.md", PRED)
     unmet = campaign.check_phase_exit("demo")
     assert any("Budget overrun" in m for m in unmet)
     with open(path / "log.md", "a", encoding="utf-8") as fh:
@@ -190,6 +192,7 @@ def test_freeze_detects_edits_and_lock_freezes_statement():
     assert campaign.frozen_changed("demo") == ["experiments/scorer.py"]
     campaign.set_phase("demo", "explore")
     _write(path / "experiments" / "results.json", "{}")
+    _write(path / "questions.md", PRED)
     assert any("frozen files changed" in m for m in campaign.check_phase_exit("demo"))
     campaign.unfreeze("demo", ["experiments/scorer.py"])
     assert campaign.check_phase_exit("demo") == []

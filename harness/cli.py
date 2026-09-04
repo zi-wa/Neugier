@@ -11,8 +11,9 @@ COMMANDS = {
     "falsify": ("harness.verify.cli", "numeric/symbolic falsification harness"),
     "evolve": ("harness.search.cli", "evolutionary program search"),
     "paper": ("harness.paper.cli", "build / check / repro appendix for the LaTeX paper"),
-    "library": ("harness.library.cli", "cross-campaign memory (rejected topics, results, facts)"),
+    "library": ("harness.library.cli", "cross-campaign memory (rejected topics, results, facts, questions)"),
     "campaign": ("harness.campaign", "create / inspect campaigns"),
+    "questions": ("harness.questions", "curiosity engine: rank open questions, log surprises/detours, escalate to humans"),
 }
 
 

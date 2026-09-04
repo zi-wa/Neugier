@@ -46,12 +46,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="record the fact even if the excerpt is not found in a cached source (stored as unverified)")
 
     s = sub.add_parser("search", help="search a store")
-    s.add_argument("store", choices=["rejected", "results", "facts"])
+    s.add_argument("store", choices=["rejected", "results", "facts", "questions"])
     s.add_argument("query")
     s.add_argument("--limit", type=int, default=20)
 
     ls = sub.add_parser("list", help="dump a store")
-    ls.add_argument("store", choices=["rejected", "results", "facts"])
+    ls.add_argument("store", choices=["rejected", "results", "facts", "questions"])
 
     c = sub.add_parser("check-rejected", help="fuzzy-check whether a topic was already rejected")
     c.add_argument("topic")

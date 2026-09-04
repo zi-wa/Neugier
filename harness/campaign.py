@@ -183,8 +183,15 @@ def create(slug: str, title: str, budgets: dict | None = None, *, allow_rejected
             f"# Questions — {slug}\n\n"
             "The curiosity ledger (CLAUDE.md rule R6; see skills/references/curiosity.md). Every agent starts by writing the\n"
             "questions it genuinely has (`## Q-nnn: ...` with Curiosity, Expectation, Cheapest test, Status) and logs\n"
-            "`## Surprise` and `## Detour` entries. Exiting plan requires at least 3 `## Q-` entries.\n\n"
+            "`## Prediction`/`## Surprise` and `## Detour` entries (`harness questions surprise|detour`).\n"
+            "Exiting plan requires at least 3 `## Q-` entries; exiting explore requires at least one recorded\n"
+            "prediction/observation pair.\n\n"
         )
+
+    from harness.questions import HUMAN_FILE, HUMAN_TEMPLATE
+
+    with open(campaign_dir / HUMAN_FILE, "w", encoding="utf-8") as fh:
+        fh.write(HUMAN_TEMPLATE)
 
     return campaign_dir
 
@@ -445,6 +452,39 @@ def set_outcome(slug: str, outcome: str) -> Campaign:
     return camp
 
 
+def finish(slug: str, outcome: str | None = None) -> dict:
+    """Close the campaign: validate the outcome, record the result and the open questions in the
+    library, set phase ``done`` and release the Stop-hook gate. Returns a summary dict."""
+    from harness.library import memory
+    from harness.questions import load_doc
+
+    campaign_dir = _campaign_dir(slug)
+    if outcome is not None:
+        set_outcome(slug, outcome)
+    camp = load(slug)
+    problems = validate_outcome(slug, camp.outcome_class)
+    if problems:
+        raise CampaignError("cannot finish: " + "; ".join(problems))
+    log_text = _read_text(campaign_dir / "log.md") or ""
+    if "## Outcome" not in log_text:
+        raise CampaignError("cannot finish: log.md has no '## Outcome' section (what was proven, what was not, dead routes, time spent)")
+    store = LedgerStore(campaign_dir / "ledger.json", campaign=slug)
+    claims = [{"id": c.id, "statement": c.statement, "status": c.status, "kind": c.kind} for c in store.assertable()]
+    paper = campaign_dir / "paper" / "main.pdf"
+    memory.add_result(slug, camp.title, camp.outcome_class or "negative", claims=claims,
+                      paper_path=str(paper) if paper.exists() else None)
+    open_q = [q.model_dump() for q in load_doc(campaign_dir).open()]
+    added = memory.add_open_questions(slug, open_q)
+    if camp.phase != "done":
+        set_phase(slug, "done")
+    for marker in (".gate", ".gate_attempts"):
+        try:
+            (campaign_dir / marker).unlink()
+        except OSError:
+            pass
+    return {"slug": slug, "outcome_class": camp.outcome_class, "claims": len(claims), "open_questions_recorded": added}
+
+
 # ------------------------------------------------------------- portfolio --
 
 def selected_target_statement(campaign_dir: Path) -> str | None:
@@ -602,6 +642,13 @@ def check_phase_exit(slug: str) -> list[str]:
             unmet.append(f"untested conjectured claims (need computation/falsification evidence): {untested}")
         if not (campaign_dir / "experiments" / "results.json").exists():
             unmet.append("experiments/results.json does not exist")
+        from harness.questions import load_doc, recorded_predictions
+
+        if not recorded_predictions(load_doc(campaign_dir)):
+            unmet.append(
+                "questions.md has no recorded prediction/observation pair (rule R6: write the prediction before each "
+                "experiment and compare after; `harness questions surprise --prediction … --observation … --score n`)"
+            )
 
     elif phase == "prove":
         store = _ledger()
@@ -616,6 +663,14 @@ def check_phase_exit(slug: str) -> list[str]:
                 break
         if not ok:
             unmet.append("no claim with status >= proof-drafted has a proof evidence file that still exists")
+        from harness.questions import load_doc, unanswered_by
+
+        open_prover = [q.id for q in unanswered_by(load_doc(campaign_dir), "prover")]
+        if open_prover:
+            unmet.append(
+                f"open questions raised by the prover must be answered or parked before leaving prove: {open_prover} "
+                "(`harness questions answer|park <id> --ref …`)"
+            )
 
     elif phase == "review":
         store = _ledger()
@@ -736,6 +791,29 @@ def status_report(slug: str) -> str:
             flag = "MODIFIED" if rel in changed or f"{rel} (missing)" in changed else "ok"
             lines.append(f"- {rel}: {flag}")
 
+    from harness.questions import advisories, budget_status, human_summary, load_doc, rank_open
+
+    cdir = _campaign_dir(slug)
+    doc = load_doc(cdir)
+    by_status: dict[str, int] = {}
+    for q in doc.questions:
+        by_status[q.status] = by_status.get(q.status, 0) + 1
+    qb = budget_status(cdir)
+    lines += ["", "## Questions (rule R6)", ""]
+    lines.append(f"- questions: {', '.join(f'{k} {v}' for k, v in sorted(by_status.items())) or 'none'}; "
+                 f"observations: {len(doc.observations)}; detours: {len(doc.detours)}")
+    if qb["detour_budget_minutes"] is not None:
+        lines.append(f"- detour budget ({qb['phase']}): {qb['detour_minutes_used']:.0f}/{qb['detour_budget_minutes']:.0f} min"
+                     + (" **OVER**" if qb["over"] else ""))
+    for gain, q in rank_open(doc)[:3]:
+        lines.append(f"- next: {q.id} {q.title} (gain {gain:.3f}; test: {q.cheapest_test or '?'})")
+    for a in advisories(cdir):
+        lines.append(f"- advisory: {a}")
+    hs = human_summary(cdir, camp.budgets.model_dump())
+    lines += ["", "## Human", "",
+              f"- escalations: {hs['used']}/{hs['limit']} used; open: {', '.join(hs['open']) or 'none'}; "
+              f"HUMAN.md updated: {hs['human_md_updated'] or 'never'}"]
+
     lines += [
         "",
         "## Ledger summary",
@@ -787,6 +865,10 @@ def main(argv: list[str] | None = None) -> int:
     p_outcome.add_argument("slug")
     p_outcome.add_argument("outcome", choices=list(OUTCOME_CLASSES))
 
+    p_finish = sub.add_parser("finish", help="validate the outcome, record result + open questions in the library, set phase done")
+    p_finish.add_argument("slug")
+    p_finish.add_argument("--outcome", choices=list(OUTCOME_CLASSES), default=None)
+
     p_freeze = sub.add_parser("freeze", help="record hashes of files that must not change during explore/prove/review")
     p_freeze.add_argument("slug")
     p_freeze.add_argument("paths", nargs="+")
@@ -820,11 +902,20 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.cmd == "check":
             unmet = check_phase_exit(args.slug)
+            from harness.questions import advisories
+
+            for a in advisories(_campaign_dir(args.slug)):
+                print(f"advisory: {a}", file=sys.stderr)
             if unmet:
                 for m in unmet:
                     print(f"- {m}")
                 return 1
             print("ok: phase exit criteria met")
+            return 0
+
+        if args.cmd == "finish":
+            summary = finish(args.slug, args.outcome)
+            print(json.dumps(summary, indent=2, sort_keys=True))
             return 0
 
         if args.cmd == "lock-statement":

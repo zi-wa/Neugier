@@ -56,8 +56,12 @@ def cmd_repro(args: argparse.Namespace) -> int:
     from harness import CAMPAIGNS
     from harness.paper.repro import write_appendix
 
+    from harness.paper.questions_tex import write_questions_appendix
+
     out = write_appendix(CAMPAIGNS / args.campaign)
     print(f"wrote {out}")
+    out2 = write_questions_appendix(CAMPAIGNS / args.campaign)
+    print(f"wrote {out2}")
     return 0
 
 
@@ -94,7 +98,10 @@ def cmd_all(args: argparse.Namespace) -> int:
     campaign_dir = CAMPAIGNS / args.campaign
     paper_dir = campaign_dir / "paper"
 
+    from harness.paper.questions_tex import write_questions_appendix
+
     write_appendix(campaign_dir)
+    write_questions_appendix(campaign_dir)
 
     build_result = build(paper_dir)
     print(f"build: {'OK' if build_result.ok else 'FAILED'}  engine={build_result.engine}  seconds={build_result.seconds:.1f}")

@@ -35,6 +35,7 @@ _STORE_FILES = {
     "rejected": "rejected.jsonl",
     "results": "results.jsonl",
     "facts": "facts.jsonl",
+    "questions": "questions.jsonl",
 }
 
 
@@ -168,6 +169,44 @@ def add_fact(
     }
     _append("facts", record)
     return record
+
+
+def add_open_questions(campaign: str, questions: list[dict[str, Any]], date: str | None = None) -> int:
+    """Append still-open questions of a finished campaign (cross-campaign curiosity, rule R6).
+
+    Deduped on ``(campaign, id)``. Returns the number of rows written.
+    """
+    existing = {(r.get("campaign"), r.get("id")) for r in all("questions")}
+    n = 0
+    for q in questions:
+        key = (campaign, q.get("id"))
+        if key in existing:
+            continue
+        record = {
+            "campaign": campaign,
+            "id": q.get("id"),
+            "title": q.get("title", ""),
+            "curiosity": q.get("curiosity"),
+            "curiosity_max": q.get("curiosity_max"),
+            "stake": q.get("stake"),
+            "expectation": q.get("expectation", ""),
+            "cheapest_test": q.get("cheapest_test", ""),
+            "p_true": q.get("p_true"),
+            "status": q.get("status", "open"),
+            "raised_by": q.get("raised_by", ""),
+            "date": date or _utc_now_iso(),
+        }
+        _append("questions", record)
+        existing.add(key)
+        n += 1
+    return n
+
+
+def open_questions(query: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+    """Open questions left by past campaigns, optionally filtered by a token query."""
+    if query:
+        return [r for r in search("questions", query, limit=limit) if r.get("status", "open") == "open"]
+    return [r for r in all("questions") if r.get("status", "open") == "open"][:limit]
 
 
 def _tokenize(text: str) -> list[str]:

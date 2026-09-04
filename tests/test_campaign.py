@@ -241,6 +241,9 @@ def test_check_phase_exit_explore():
 
     store.add_evidence(claim.id, Evidence(type="computation", summary="checked, no path needed for this rule"), path)
     _write(path / "experiments" / "results.json", "{}")
+    unmet = campaign.check_phase_exit("demo")
+    assert any("prediction/observation" in m for m in unmet)  # rule R6: predict before experimenting
+    _write(path / "questions.md", "## Prediction: small cases\n- Predicted: 3\n- Observed: 3\n- Surprise: 1/3\n")
 
     assert campaign.check_phase_exit("demo") == []
 
