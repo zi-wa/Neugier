@@ -10,7 +10,7 @@ import harness.ledger.cli as ledger_cli
 from harness.ledger.ledger import LedgerError, LedgerStore
 from harness.ledger.schema import Evidence
 
-REFEREE_ROLES = ("skeptic", "falsifier", "novelty", "judge")
+REFEREE_ROLES = ("skeptic", "falsifier", "novelty", "replicator", "judge")
 
 
 def _mk_campaign(tmp_path: Path) -> Path:
@@ -145,6 +145,7 @@ def test_excerpt_with_source_id_and_min_length_succeeds(tmp_path):
     d = _mk_campaign(tmp_path)
     store = _store(d)
     claim = store.add(kind="fact", statement="A fact from the literature.")
+    _write(d / "cache" / "smith2020.txt", "preamble " + "x" * 25 + " postamble")
     updated = store.add_evidence(
         claim.id,
         Evidence(type="excerpt", summary="fine", source_id="smith2020", excerpt="x" * 25, locator="p. 12"),
@@ -152,6 +153,9 @@ def test_excerpt_with_source_id_and_min_length_succeeds(tmp_path):
     )
     assert updated.evidence[-1].type == "excerpt"
     assert updated.evidence[-1].file_hash is None  # no path given
+    assert updated.evidence[-1].verified is True
+    assert updated.evidence[-1].source_sha256
+    assert len(updated.evidence[-1].excerpt_hash) == 12
 
 
 def test_referee_evidence_requires_role_and_verdict(tmp_path):
@@ -285,6 +289,7 @@ def test_promote_referee_passed_requires_full_round_and_judge(tmp_path):
         store.promote(thm.id, "referee-passed", d)
 
     store.add_evidence(thm.id, Evidence(type="referee", role="novelty", verdict="pass", round=1, summary="ok"), d)
+    store.add_evidence(thm.id, Evidence(type="referee", role="replicator", verdict="n/a", round=1, summary="ok"), d)
     store.add_evidence(thm.id, Evidence(type="referee", role="judge", verdict="pass", round=1, summary="ok"), d)
 
     updated = store.promote(thm.id, "referee-passed", d)
@@ -407,6 +412,7 @@ def test_promote_known_in_literature_requires_excerpt(tmp_path):
     with pytest.raises(LedgerError):
         store.promote(claim.id, "known-in-literature", d)
 
+    _write(d / "cache" / "smith2020.txt", "Theorem 1. " + "x" * 30 + " holds.")
     store.add_evidence(
         claim.id, Evidence(type="excerpt", source_id="smith2020", excerpt="x" * 30, summary="found it"), d
     )

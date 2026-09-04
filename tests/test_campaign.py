@@ -10,7 +10,7 @@ import harness.campaign as campaign
 from harness.ledger.ledger import LedgerStore
 from harness.ledger.schema import Evidence
 
-REFEREE_ROLES = ("skeptic", "falsifier", "novelty", "judge")
+REFEREE_ROLES = ("skeptic", "falsifier", "novelty", "replicator", "judge")
 
 
 @pytest.fixture(autouse=True)
@@ -141,6 +141,7 @@ def test_check_phase_exit_survey():
     )
     store = LedgerStore(path / "ledger.json", campaign="demo")
     for i in range(3):
+        _write(path / "cache" / f"src{i}.txt", "Lemma. " + "x" * 25 + " (see p. 3)")
         claim = store.add(kind="fact", statement=f"Known fact number {i}.")
         store.add_evidence(
             claim.id,

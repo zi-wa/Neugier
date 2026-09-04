@@ -1,12 +1,27 @@
 """The claim ledger store: load/save/mutate ``campaigns/<slug>/ledger.json``.
 
 Every mutating method (:meth:`LedgerStore.add`, :meth:`~LedgerStore.add_evidence`,
-:meth:`~LedgerStore.promote`, :meth:`~LedgerStore.update_statement`) validates its
+:meth:`~LedgerStore.promote`, :meth:`~LedgerStore.update_statement`,
+:meth:`~LedgerStore.reverify`, :meth:`~LedgerStore.set_stakes`) validates its
 rule set, mutates the in-memory ledger, appends a history entry to the affected
 claim(s) *and* an append-only line to ``ledger.audit.jsonl`` (next to the ledger
 file), then persists the whole ledger atomically. This keeps the ledger durable
 after every single CLI invocation without every caller having to remember to
 call :meth:`~LedgerStore.save` themselves.
+
+Promotion is evidence-gated (rule R5d): a status is reached only through the
+evidence its rule demands, never through a stated confidence. Since Round 2:
+
+* ``add`` may create claims only at ``idea``/``conjectured`` (or at
+  ``known-in-literature`` when a verified excerpt is supplied in the same call);
+  every other status is reached via ``promote``.
+* An ``excerpt`` evidence is verified against the cached source text
+  (:mod:`harness.lit.cache`); ``known-in-literature`` requires ``verified is True``.
+* A referee round needs skeptic, falsifier, novelty, replicator and judge; the
+  replicator may answer ``n/a`` when there is nothing to replicate (the review
+  regime, Round-2 Step 18, can demand more skeptic passes and forbid ``n/a``).
+* ``stale`` is cleared only by :meth:`~LedgerStore.reverify`, which requires a
+  complete referee round recorded *after* the staleness event.
 """
 from __future__ import annotations
 
@@ -58,7 +73,11 @@ PIPELINE_ORDER: list[str] = [
 DEPENDS_OK_FOR_PROOF_DRAFTED = {"proof-drafted", "referee-passed", "formalized", "known-in-literature"}
 DEPENDS_OK_FOR_REFEREE_PASSED = {"referee-passed", "formalized", "known-in-literature"}
 
-REFEREE_ROUND_ROLES = ("skeptic", "falsifier", "novelty", "judge")
+REFEREE_ROUND_ROLES = ("skeptic", "falsifier", "novelty", "replicator", "judge")
+# Statuses a claim may be *created* at. Everything else is reached via promote().
+ADD_ALLOWED_STATUSES = {"idea", "conjectured"}
+REPAIR_OPS = ("add-hypothesis", "weaken-bound", "absorb-and-regenerate")
+STALE_OPS = {"mark-stale", "cascade-stale", "cascade-refute"}
 
 
 def pipeline_rank(status: str) -> int | None:
@@ -115,6 +134,20 @@ def _resolve_under(campaign_dir: Path, rel_path: str) -> Path:
     return full
 
 
+def load_budgets(campaign_dir: Path | None) -> dict:
+    """``budgets`` from ``campaigns/<slug>/campaign.json`` (pure json; ``{}`` if absent)."""
+    if campaign_dir is None:
+        return {}
+    path = Path(campaign_dir) / "campaign.json"
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    budgets = data.get("budgets") if isinstance(data, dict) else None
+    return budgets if isinstance(budgets, dict) else {}
+
+
 class LedgerStore:
     """Load/save/mutate the claim ledger for one campaign."""
 
@@ -152,12 +185,24 @@ class LedgerStore:
             fh.write(json.dumps(entry, sort_keys=True, ensure_ascii=False))
             fh.write("\n")
 
-    def _record(self, claim: Claim, op: str, from_: str | None, to: str | None, detail: str) -> None:
+    def _record(
+        self,
+        claim: Claim,
+        op: str,
+        from_: str | None,
+        to: str | None,
+        detail: str,
+        extra: dict | None = None,
+    ) -> dict:
         ts = utc_now_iso()
         entry = {"ts": ts, "op": op, "claim_id": claim.id, "from": from_, "to": to, "detail": detail}
+        if extra:
+            for k, v in extra.items():
+                entry.setdefault(k, v)
         claim.history.append(entry)
         claim.updated = ts
         self._audit(entry)
+        return entry
 
     # ------------------------------------------------------------------ lookup --
 
@@ -210,13 +255,58 @@ class LedgerStore:
         tags: Sequence[str] = (),
         status: Status = "idea",
         notes: str = "",
+        *,
+        evidence: Evidence | None = None,
+        campaign_dir: Path | None = None,
+        repaired_from: str | None = None,
+        repair_op: str | None = None,
+        stakes: int | None = None,
+        require_verified_excerpt: bool = True,
     ) -> Claim:
+        """Create a claim.
+
+        ``status`` may be ``idea`` or ``conjectured``. ``known-in-literature`` is
+        accepted only together with an excerpt ``evidence`` (and ``campaign_dir``):
+        the claim is created, the excerpt verified and attached, and the claim
+        promoted in one call, so the promotion rule still applies. Any other
+        status is rejected — reach it via :meth:`promote`.
+        """
         if kind not in KIND_PREFIX:
             raise LedgerError(f"unknown claim kind: {kind!r}")
+        target_status: str | None = None
+        if status not in ADD_ALLOWED_STATUSES:
+            if status == "known-in-literature" and evidence is not None and evidence.type == "excerpt":
+                if campaign_dir is None:
+                    raise LedgerError("adding a known-in-literature claim requires campaign_dir for excerpt verification")
+                target_status = "known-in-literature"
+                status = "idea"
+            else:
+                raise LedgerError(
+                    f"claims may only be created with status {sorted(ADD_ALLOWED_STATUSES)} "
+                    f"(got {status!r}); promote with evidence instead "
+                    "(known-in-literature is allowed only with an excerpt evidence in the same call)"
+                )
         depends_on = list(depends_on)
         for dep in depends_on:
             if dep not in self.ledger.claims:
                 raise LedgerError(f"depends_on references unknown claim id: {dep!r}")
+
+        tags = list(tags)
+        if repaired_from is not None:
+            parent = self.ledger.claims.get(repaired_from)
+            if parent is None:
+                raise LedgerError(f"repaired_from references unknown claim id: {repaired_from!r}")
+            if parent.status != "refuted":
+                raise LedgerError(f"repaired_from {repaired_from} must be 'refuted' (is {parent.status!r})")
+            if repair_op not in REPAIR_OPS:
+                raise LedgerError(f"repair_op must be one of {REPAIR_OPS} when repaired_from is given (got {repair_op!r})")
+            tag = f"repaired:{repaired_from}"
+            if tag not in tags:
+                tags.append(tag)
+        elif repair_op is not None:
+            raise LedgerError("repair_op requires repaired_from")
+        if stakes is not None and stakes not in (0, 1, 2):
+            raise LedgerError(f"stakes must be 0, 1 or 2 (got {stakes!r})")
 
         new_id = self._next_id(kind)
         if self._would_cycle(new_id, depends_on):
@@ -229,20 +319,45 @@ class LedgerStore:
             statement=statement,
             status=status,
             depends_on=depends_on,
-            tags=list(tags),
+            tags=tags,
             notes=notes,
             hash=statement_hash(statement),
             created=now,
             updated=now,
+            stakes=stakes if stakes is not None else 1,
+            repaired_from=repaired_from,
+            repair_op=repair_op,  # type: ignore[arg-type]
         )
         self.ledger.claims[new_id] = claim
-        self._record(claim, "add", None, status, f"created {kind} claim")
+        detail = f"created {kind} claim"
+        if repaired_from:
+            detail += f" (repair of {repaired_from} via {repair_op})"
+        self._record(claim, "add", None, status, detail)
         self.save()
-        return claim
+        if target_status is not None:
+            assert evidence is not None and campaign_dir is not None
+            self.add_evidence(new_id, evidence, campaign_dir, require_verified_excerpt=require_verified_excerpt)
+            self.promote(new_id, target_status, campaign_dir)  # type: ignore[arg-type]
+        return self.get(new_id)
 
     # ---------------------------------------------------------------- evidence --
 
-    def add_evidence(self, claim_id: str, evidence: Evidence, campaign_dir: Path) -> Claim:
+    def add_evidence(
+        self,
+        claim_id: str,
+        evidence: Evidence,
+        campaign_dir: Path,
+        *,
+        require_verified_excerpt: bool = True,
+    ) -> Claim:
+        """Attach evidence after validating the rules for its type.
+
+        Excerpts are verified against the cached source text every time (a
+        caller-supplied ``verified`` is ignored). With ``require_verified_excerpt``
+        (the default) an excerpt that is not found — or whose source is not cached
+        — is rejected; pass ``False`` (CLI ``--unverified-ok``) to record it as
+        unverified, in which case it never counts toward ``known-in-literature``.
+        """
         claim = self.get(claim_id)
         campaign_dir = Path(campaign_dir)
 
@@ -254,21 +369,68 @@ class LedgerStore:
                     "evidence type 'excerpt' requires a verbatim excerpt of at least 20 characters "
                     "(anti-hallucination rule R5: no literature claim without a fetched excerpt)"
                 )
+            from harness.lit.cache import verify_excerpt  # local import: lit is heavier than the ledger
+
+            check = verify_excerpt(evidence.excerpt, evidence.source_id, campaign_dir)
+            evidence.verified = check.verified
+            evidence.source_path = check.source_path
+            evidence.source_sha256 = check.source_sha256
+            evidence.excerpt_hash = check.excerpt_hash
+            if require_verified_excerpt and check.verified is not True:
+                raise LedgerError(
+                    f"excerpt for source {evidence.source_id!r} is not verified ({check.method}: {check.detail}). "
+                    "Fetch the source into the campaign cache first (`harness lit fetch <source-id>`) so the "
+                    "excerpt can be matched against it, or pass --unverified-ok to record it as unverified "
+                    "(unverified excerpts never count toward known-in-literature)"
+                )
         if evidence.type == "referee":
             if not evidence.role:
                 raise LedgerError("evidence type 'referee' requires role")
             if not evidence.verdict:
                 raise LedgerError("evidence type 'referee' requires verdict")
+            if evidence.verdict == "n/a" and evidence.role != "replicator":
+                raise LedgerError("verdict 'n/a' is allowed only for role 'replicator' (nothing to replicate)")
+            if evidence.reliability is not None and not 0.0 <= evidence.reliability <= 1.0:
+                raise LedgerError("reliability must be within [0, 1]")
 
         if evidence.path is not None:
             full = _resolve_under(campaign_dir, evidence.path)
             evidence.file_hash = file_hash(full)
 
         claim.evidence.append(evidence)
+        extra = {}
+        if evidence.type == "excerpt":
+            extra = {"verified": evidence.verified, "excerpt_hash": evidence.excerpt_hash}
+        if evidence.type == "referee":
+            extra = {"role": evidence.role, "verdict": evidence.verdict, "round": evidence.round,
+                     "agent_id": evidence.agent_id, "reliability": evidence.reliability}
         self._record(
             claim, "add_evidence", None, evidence.type,
-            evidence.summary or f"{evidence.type} evidence added",
+            evidence.summary or f"{evidence.type} evidence added", extra,
         )
+        self.save()
+        return claim
+
+    # ------------------------------------------------------------------ stakes --
+
+    def set_stakes(self, claim_id: str, stakes: int) -> Claim:
+        """Set the stakes tier (0 routine, 1 standard, 2 extraordinary) — drives the review regime."""
+        if stakes not in (0, 1, 2):
+            raise LedgerError(f"stakes must be 0, 1 or 2 (got {stakes!r})")
+        claim = self.get(claim_id)
+        old = claim.stakes
+        claim.stakes = stakes  # type: ignore[assignment]
+        self._record(claim, "stakes", str(old), str(stakes), "stakes changed")
+        self.save()
+        return claim
+
+    def attest(self, claim_id: str, human: str, note: str = "") -> Claim:
+        """Record a human sign-off (only humans call this; agents are denied by hook)."""
+        if not human.strip():
+            raise LedgerError("attestation requires the human's name")
+        claim = self.get(claim_id)
+        claim.attestation = {"by": human.strip(), "ts": utc_now_iso(), "note": note}
+        self._record(claim, "attest", None, human.strip(), note or "human attestation recorded")
         self.save()
         return claim
 
@@ -305,23 +467,64 @@ class LedgerStore:
                 problems.append(f"{dep_id} (status={got}, needs one of {sorted(allowed)})")
         return problems
 
-    def _referee_round_complete(self, claim: Claim) -> tuple[int | None, list[str]]:
-        """Return ``(round, [])`` for the highest round where skeptic/falsifier/novelty
-        all passed plus a judge pass; else ``(None, missing-for-latest-round)``."""
-        rounds: dict[int, dict[str, str]] = {}
-        for ev in claim.evidence:
-            if ev.type == "referee" and ev.round is not None and ev.role:
-                rounds.setdefault(ev.round, {})[ev.role] = ev.verdict or ""
+    @staticmethod
+    def _round_status(
+        evidences: list[Evidence],
+        *,
+        skeptic_passes: int,
+        replicator_required: bool,
+    ) -> list[str]:
+        """Missing items for one referee round (empty list = round complete)."""
+        missing: list[str] = []
+        skeptics = [ev for ev in evidences if ev.role == "skeptic" and ev.admissible is not False]
+        passes = [ev for ev in skeptics if ev.verdict == "pass"]
+        dissent = [ev for ev in skeptics if ev.verdict in ("fail", "revise")]
+        distinct = {ev.agent_id if ev.agent_id else f"#{i}" for i, ev in enumerate(passes)}
+        if dissent:
+            missing.append(f"skeptic unanimity broken ({len(dissent)} admissible skeptic verdict(s) not 'pass')")
+        if len(passes) < skeptic_passes or len(distinct) < skeptic_passes:
+            missing.append(f"{skeptic_passes} admissible skeptic pass(es) from distinct agent_ids (have {len(distinct)})")
+        for role in ("falsifier", "novelty", "judge"):
+            if not any(ev.role == role and ev.verdict == "pass" for ev in evidences):
+                missing.append(f"{role} pass")
+        rep = [ev for ev in evidences if ev.role == "replicator"]
+        if not rep:
+            missing.append("replicator pass" + ("" if replicator_required else " (or n/a)"))
+        elif not any(ev.verdict == "pass" or (ev.verdict == "n/a" and not replicator_required) for ev in rep):
+            missing.append("replicator pass" + ("" if replicator_required else " (or n/a)"))
+        return missing
 
-        required = set(REFEREE_ROUND_ROLES)
-        complete = [r for r, roles in rounds.items() if all(roles.get(role) == "pass" for role in required)]
-        if complete:
-            return max(complete), []
+    def _referee_round_complete(
+        self,
+        claim: Claim,
+        *,
+        skeptic_passes: int = 1,
+        replicator_required: bool = False,
+        evidences: list[Evidence] | None = None,
+    ) -> tuple[int | None, list[str]]:
+        """Return ``(round, [])`` for the highest complete referee round, else
+        ``(None, missing-for-latest-round)``.
+
+        A round is complete when every admissible skeptic verdict is ``pass`` and at
+        least ``skeptic_passes`` of them come from distinct ``agent_id``s (unanimity,
+        cf. Huang & Yang arXiv 2507.15855 and AIM arXiv 2505.22451), falsifier, novelty
+        and judge passed, and the replicator passed (or answered ``n/a`` when not required).
+        """
+        rounds: dict[int, list[Evidence]] = {}
+        for ev in (claim.evidence if evidences is None else evidences):
+            if ev.type == "referee" and ev.round is not None and ev.role:
+                rounds.setdefault(ev.round, []).append(ev)
         if not rounds:
             return None, ["no referee evidence recorded"]
+        complete = [
+            r for r, evs in rounds.items()
+            if not self._round_status(evs, skeptic_passes=skeptic_passes, replicator_required=replicator_required)
+        ]
+        if complete:
+            return max(complete), []
         latest = max(rounds)
-        missing = [f"{role} pass in round {latest}" for role in required if rounds[latest].get(role) != "pass"]
-        return None, missing
+        missing = self._round_status(rounds[latest], skeptic_passes=skeptic_passes, replicator_required=replicator_required)
+        return None, [f"{m} in round {latest}" for m in missing]
 
     def _promotion_requirements(self, claim: Claim, new_status: str, campaign_dir: Path) -> list[str]:
         missing: list[str] = []
@@ -351,8 +554,9 @@ class LedgerStore:
             round_ok, round_missing = self._referee_round_complete(claim)
             if round_ok is None:
                 missing.append(
-                    "requires skeptic/falsifier/novelty verdict='pass' evidence from the same round, "
-                    "plus a judge pass in that round; missing: " + ", ".join(round_missing)
+                    "requires a complete referee round (skeptic/falsifier/novelty/replicator verdict='pass' "
+                    "— replicator may be 'n/a' — plus a judge pass, all in the same round); missing: "
+                    + ", ".join(round_missing)
                 )
             dep_problems = self._unmet_dependency_statuses(claim, DEPENDS_OK_FOR_REFEREE_PASSED)
             if dep_problems:
@@ -361,7 +565,10 @@ class LedgerStore:
                     "(or listed as an assumption via tag 'assumes:<id>'); unmet: " + ", ".join(dep_problems)
                 )
             if claim.stale:
-                missing.append("claim is stale (an upstream dependency changed since this proof/review); re-verify first")
+                missing.append(
+                    "claim is stale (an upstream dependency changed since this proof/review); "
+                    "run `ledger reverify` after a fresh complete referee round"
+                )
             return missing
 
         if new_status == "formalized":
@@ -384,8 +591,12 @@ class LedgerStore:
             return missing
 
         if new_status == "known-in-literature":
-            if not self._has_evidence(claim, {"excerpt"}):
-                missing.append("requires >=1 evidence of type 'excerpt' (with source_id + excerpt)")
+            if not any(ev.type == "excerpt" and ev.verified is True for ev in claim.evidence):
+                unverified = sum(1 for ev in claim.evidence if ev.type == "excerpt")
+                missing.append(
+                    "requires >=1 excerpt evidence verified against the cached source text"
+                    + (f" ({unverified} unverified excerpt(s) do not count)" if unverified else "")
+                )
             return missing
 
         if new_status == "dead":
@@ -431,6 +642,31 @@ class LedgerStore:
         if new_status == "refuted":
             self._cascade_refutation(claim_id)
 
+        self.save()
+        return claim
+
+    # ---------------------------------------------------------------- reverify --
+
+    def _last_stale_ts(self, claim: Claim) -> str | None:
+        stamps = [h.get("ts", "") for h in claim.history if h.get("op") in STALE_OPS]
+        return max(stamps) if stamps else None
+
+    def reverify(self, claim_id: str) -> Claim:
+        """Clear ``stale`` — only when a complete referee round was recorded after the
+        staleness event (all its referee evidence rows added later than that event)."""
+        claim = self.get(claim_id)
+        if not claim.stale:
+            raise LedgerError(f"{claim_id} is not stale")
+        since = self._last_stale_ts(claim) or ""
+        fresh = [ev for ev in claim.evidence if ev.type == "referee" and ev.added > since]
+        round_ok, missing = self._referee_round_complete(claim, evidences=fresh)
+        if round_ok is None:
+            raise LedgerError(
+                f"cannot reverify {claim_id}: no complete referee round recorded after the staleness event "
+                f"({since or 'unknown time'}); missing: " + ", ".join(missing)
+            )
+        claim.stale = False
+        self._record(claim, "reverify", "stale", "fresh", f"re-verified by referee round {round_ok}")
         self.save()
         return claim
 
@@ -531,19 +767,21 @@ class LedgerStore:
     def summary(self) -> dict:
         by_status: dict[str, int] = {}
         by_kind: dict[str, int] = {}
+        stale = 0
         for c in self.ledger.claims.values():
             by_status[c.status] = by_status.get(c.status, 0) + 1
             by_kind[c.kind] = by_kind.get(c.kind, 0) + 1
-        return {"total": len(self.ledger.claims), "by_status": by_status, "by_kind": by_kind}
+            stale += int(c.stale)
+        return {"total": len(self.ledger.claims), "by_status": by_status, "by_kind": by_kind, "stale": stale}
 
     def to_markdown(self) -> str:
-        lines = ["| id | kind | status | stale | #evidence | statement |", "|---|---|---|---|---|---|"]
+        lines = ["| id | kind | status | stakes | stale | #evidence | statement |", "|---|---|---|---|---|---|---|"]
         for cid in sorted(self.ledger.claims):
             c = self.ledger.claims[cid]
             stmt = c.statement.replace("\n", " ").replace("|", "\\|")
             if len(stmt) > 100:
                 stmt = stmt[:97] + "..."
-            lines.append(f"| {c.id} | {c.kind} | {c.status} | {c.stale} | {len(c.evidence)} | {stmt} |")
+            lines.append(f"| {c.id} | {c.kind} | {c.status} | {c.stakes} | {c.stale} | {len(c.evidence)} | {stmt} |")
         return "\n".join(lines) + "\n"
 
     def check_integrity(self, campaign_dir: Path) -> list[str]:

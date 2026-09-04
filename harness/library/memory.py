@@ -8,7 +8,9 @@ Three stores, one file each (created lazily under ``harness.LIBRARY``):
   and the claims it produced.
 * ``facts.jsonl`` -- excerpt-anchored facts pulled from the literature,
   deduped by a hash of the normalized statement so the same fact recorded
-  twice (possibly by different campaigns) doesn't bloat the store.
+  twice (possibly by different campaigns) doesn't bloat the store. Since
+  Round 2 every fact carries excerpt provenance (``verified``,
+  ``source_sha256``, ``excerpt_hash``) computed against the cached source text.
 
 Every write is a single ``json.dumps(..., ensure_ascii=False)`` line,
 appended under a UTF-8 file handle -- never rewritten, so the history of
@@ -34,6 +36,10 @@ _STORE_FILES = {
     "results": "results.jsonl",
     "facts": "facts.jsonl",
 }
+
+
+class FactUnverified(Exception):
+    """Raised by :func:`add_fact` when verification is required and the excerpt is not found."""
 
 
 def _utc_now_iso() -> str:
@@ -121,16 +127,33 @@ def add_fact(
     locator: str | None = None,
     campaign: str | None = None,
     date: str | None = None,
+    *,
+    campaign_dir: Path | str | None = None,
+    require_verified: bool = False,
 ) -> dict[str, Any] | None:
     """Append a literature fact, deduped by sha256 of the normalized statement.
+
+    The excerpt is verified against the cached source text
+    (:func:`harness.lit.cache.verify_excerpt`, searching ``campaign_dir/cache``
+    then the project cache); the record stores ``verified`` (True/False/None),
+    ``source_sha256`` and ``excerpt_hash``. With ``require_verified`` an excerpt
+    that is not verified raises :class:`FactUnverified` and nothing is written.
 
     Returns the new record, or ``None`` if a fact with the same normalized
     statement is already recorded (nothing is written in that case).
     """
+    from harness.lit.cache import verify_excerpt  # local import keeps the library cheap to import
+
     fact_hash = sha256_text(_normalize(statement))
     for existing in all("facts"):
         if existing.get("hash") == fact_hash:
             return None
+    check = verify_excerpt(excerpt, source_id, campaign_dir)
+    if require_verified and check.verified is not True:
+        raise FactUnverified(
+            f"excerpt for {source_id!r} is not verified ({check.method}: {check.detail}); fetch the source into "
+            "the cache (`harness lit fetch <source-id>`) or pass --unverified-ok"
+        )
     record = {
         "statement": statement,
         "source_id": source_id,
@@ -139,6 +162,9 @@ def add_fact(
         "hash": fact_hash,
         "campaign": campaign,
         "date": date or _utc_now_iso(),
+        "verified": check.verified,
+        "source_sha256": check.source_sha256,
+        "excerpt_hash": check.excerpt_hash,
     }
     _append("facts", record)
     return record

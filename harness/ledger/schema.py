@@ -4,6 +4,11 @@ The ledger (``campaigns/<slug>/ledger.json``) is the harness's source of
 truth for what has and has not been established. Every claim carries a
 stable id, a content hash, and an evidence trail; nothing may be asserted
 in the paper without evidence recorded here (CLAUDE.md, rule R5).
+
+Round-2 additions: excerpt provenance (``verified``, ``source_sha256``,
+``excerpt_hash``), referee identity and lineup reliability (``agent_id``,
+``reliability``, ``admissible``, ``lineup_item``), claim stakes and human
+attestation, and conjecture-repair provenance (``repaired_from``, ``repair_op``).
 """
 from __future__ import annotations
 
@@ -49,7 +54,11 @@ EvidenceType = Literal[
 ]
 
 RefereeRole = Literal["skeptic", "falsifier", "novelty", "replicator", "judge"]
-Verdict = Literal["pass", "fail", "revise"]
+# "n/a" is accepted only for the replicator (nothing to replicate); see LedgerStore.add_evidence.
+Verdict = Literal["pass", "fail", "revise", "n/a"]
+# 0 = routine lemma, 1 = standard target, 2 = would resolve a listed open problem / beat a tracked best-known value.
+Stakes = Literal[0, 1, 2]
+RepairOp = Literal["add-hypothesis", "weaken-bound", "absorb-and-regenerate"]
 
 
 def utc_now_iso() -> str:
@@ -64,6 +73,16 @@ class Evidence(BaseModel):
     ledger stays portable across machines. ``file_hash`` freezes the sha256
     of that file at the moment the evidence was recorded, so tampering can
     be detected later by :meth:`harness.ledger.ledger.LedgerStore.check_integrity`.
+
+    Excerpt provenance (type ``excerpt``): ``verified`` is ``True`` when the
+    excerpt was found in the cached source text at ``source_path`` (whose
+    sha256 is ``source_sha256``), ``False`` when the source was cached but the
+    excerpt was not found, ``None`` when no source text was available.
+    ``excerpt_hash`` is the 12-hex prefix that ``<cite excerpt-hash="…">`` binds to.
+
+    Referee provenance (type ``referee``): ``agent_id`` identifies the fresh
+    context that produced the verdict; ``reliability`` / ``admissible`` come
+    from the decoy-lineup score; ``lineup_item`` is the item letter reviewed.
     """
 
     type: EvidenceType
@@ -77,6 +96,16 @@ class Evidence(BaseModel):
     verdict: Verdict | None = None
     round: int | None = None
     added: str = Field(default_factory=utc_now_iso)
+    # excerpt provenance
+    source_path: str | None = None
+    source_sha256: str | None = None
+    verified: bool | None = None
+    excerpt_hash: str | None = None
+    # referee provenance
+    agent_id: str | None = None
+    reliability: float | None = None
+    admissible: bool | None = None
+    lineup_item: str | None = None
 
 
 class Claim(BaseModel):
@@ -95,6 +124,11 @@ class Claim(BaseModel):
     created: str = Field(default_factory=utc_now_iso)
     updated: str = Field(default_factory=utc_now_iso)
     history: list[dict] = Field(default_factory=list)
+    # Round 2
+    stakes: Stakes = 1
+    attestation: dict | None = None
+    repaired_from: str | None = None
+    repair_op: RepairOp | None = None
 
 
 class Ledger(BaseModel):

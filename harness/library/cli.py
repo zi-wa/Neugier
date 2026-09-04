@@ -6,6 +6,7 @@ import json
 import sys
 from pathlib import Path
 
+import harness
 from harness.library import memory
 
 
@@ -35,12 +36,14 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--claims-json", help="path to a JSON list of {id, statement, status}")
     r.add_argument("--paper", help="path to the paper PDF/TeX")
 
-    f = sub.add_parser("add-fact", help="record an excerpt-anchored literature fact (deduped)")
+    f = sub.add_parser("add-fact", help="record an excerpt-anchored literature fact (deduped, excerpt verified against the cache)")
     f.add_argument("--statement", required=True)
     f.add_argument("--source-id", required=True)
     f.add_argument("--excerpt", required=True)
     f.add_argument("--locator")
-    f.add_argument("--campaign")
+    f.add_argument("--campaign", help="campaign slug whose cache/ holds the fetched source text")
+    f.add_argument("--unverified-ok", action="store_true",
+                   help="record the fact even if the excerpt is not found in a cached source (stored as unverified)")
 
     s = sub.add_parser("search", help="search a store")
     s.add_argument("store", choices=["rejected", "results", "facts"])
@@ -66,7 +69,15 @@ def main(argv: list[str] | None = None) -> int:
             claims = json.loads(Path(ns.claims_json).read_text(encoding="utf-8"))
         _print_json(memory.add_result(ns.campaign, ns.title, ns.outcome, claims=claims, paper_path=ns.paper))
     elif ns.cmd == "add-fact":
-        rec = memory.add_fact(ns.statement, ns.source_id, ns.excerpt, locator=ns.locator, campaign=ns.campaign)
+        campaign_dir = (Path(harness.CAMPAIGNS) / ns.campaign) if ns.campaign else None
+        try:
+            rec = memory.add_fact(
+                ns.statement, ns.source_id, ns.excerpt, locator=ns.locator, campaign=ns.campaign,
+                campaign_dir=campaign_dir, require_verified=not ns.unverified_ok,
+            )
+        except memory.FactUnverified as exc:
+            print(f"[harness.library] {exc}", file=sys.stderr)
+            return 1
         _print_json(rec if rec is not None else {"deduped": True})
     elif ns.cmd == "search":
         _print_json(memory.search(ns.store, ns.query, limit=ns.limit))
