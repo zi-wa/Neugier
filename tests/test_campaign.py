@@ -302,7 +302,7 @@ def test_check_phase_exit_review_full_pass():
     for fname in ("skeptic.md", "falsifier.md"):
         _write(round_dir / fname, "notes")
     _write(round_dir / "novelty.md", NOVELTY_OK)
-    _write(round_dir / "judge.md", "notes\nVERDICT: PASS\n")
+    _write(round_dir / "judge.md", "notes\n```yaml\nrole: judge\nclaim: T-001\nround: 1\nupheld: []\nrebutted: []\nmoot: []\nverdict: PASS\n```\nVERDICT: PASS\n")
     _log_activity(round_dir)
 
     # files present, but no claim referee-passed yet and judge.md has no PIVOT
@@ -329,7 +329,7 @@ def test_check_phase_exit_review_pivot_path():
     for fname in ("skeptic.md", "falsifier.md"):
         _write(round_dir / fname, "notes")
     _write(round_dir / "novelty.md", NOVELTY_OK)
-    _write(round_dir / "judge.md", "Some notes.\nVERDICT: PIVOT\n")
+    _write(round_dir / "judge.md", "Some notes.\n```yaml\nrole: judge\nclaim: T-001\nround: 1\nupheld: []\nrebutted: []\nmoot: []\nverdict: PIVOT\n```\nVERDICT: PIVOT\n")
     _log_activity(round_dir)
 
     assert campaign.check_phase_exit("demo") == []

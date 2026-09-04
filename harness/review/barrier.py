@@ -446,6 +446,16 @@ def check_round(campaign_dir: Path | str, round_n: int, store=None) -> list[str]
     for extra in _lineup_checks(campaign_dir, round_n, manifest):
         problems.append(f"round {round_n}: {extra}")
 
+    regime = regime_of_manifest(manifest)
+    if regime.final_statement_recheck:
+        try:
+            from harness.review.novelty_recheck import novelty_recheck
+        except ImportError:  # pragma: no cover
+            novelty_recheck = None  # type: ignore[assignment]
+        if novelty_recheck is not None:
+            for extra in novelty_recheck(campaign_dir, round_n, manifest, required=True):
+                problems.append(f"round {round_n}: {extra}")
+
     if store is not None:
         for p in store.check_integrity(campaign_dir):
             problems.append(f"ledger integrity: {p}")
