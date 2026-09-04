@@ -10,18 +10,31 @@ $env:PIP_CACHE_DIR = Join-Path $Root ".cache\pip"
 $env:TECTONIC_CACHE_DIR = Join-Path $Root ".cache\tectonic"
 New-Item -ItemType Directory -Force -Path (Join-Path $Root ".cache"), (Join-Path $Root "bin"), (Join-Path $Root "campaigns"), (Join-Path $Root "library") | Out-Null
 
-if (-not (Get-Command uv -ErrorAction SilentlyContinue)) { throw "uv not found on PATH. Install uv (https://docs.astral.sh/uv/) or run scripts/bootstrap.sh which falls back to python -m venv." }
+$HasUv = [bool](Get-Command uv -ErrorAction SilentlyContinue)
+if (-not $HasUv) { Write-Host "[bootstrap] uv not found; falling back to python -m venv + pip (slower)" }
 
 # 1. virtual environment
-if (-not (Test-Path (Join-Path $Root ".venv\Scripts\python.exe"))) {
+$Py = Join-Path $Root ".venv\Scripts\python.exe"
+if (-not (Test-Path $Py)) {
   Write-Host "[bootstrap] creating .venv"
-  uv venv (Join-Path $Root ".venv") --python 3.13
+  if ($HasUv) { uv venv (Join-Path $Root ".venv") --python 3.13 }
+  else {
+    $host_py = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $host_py) { throw "python 3.11+ not found on PATH" }
+    & $host_py.Source -m venv (Join-Path $Root ".venv")
+  }
 }
 if (-not $SkipDeps) {
   Write-Host "[bootstrap] installing requirements into .venv"
-  uv pip uninstall --python (Join-Path $Root ".venv\Scripts\python.exe") claudemath-harness 2>$null | Out-Null
-  uv pip install --python (Join-Path $Root ".venv\Scripts\python.exe") -r (Join-Path $Root "requirements.txt")
-  uv pip install --python (Join-Path $Root ".venv\Scripts\python.exe") -e $Root
+  if ($HasUv) {
+    uv pip uninstall --python $Py claudemath-harness 2>$null | Out-Null
+    uv pip install --python $Py -r (Join-Path $Root "requirements.txt")
+    uv pip install --python $Py -e $Root
+  } else {
+    & $Py -m pip install --upgrade pip
+    & $Py -m pip install -r (Join-Path $Root "requirements.txt")
+    & $Py -m pip install -e $Root
+  }
 }
 
 # 2. tectonic (single-binary LaTeX engine), project-local

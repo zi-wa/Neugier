@@ -7,7 +7,6 @@
 
 <p align="center">
   <a href="https://github.com/zi-wa/Neugier/actions/workflows/tests.yml"><img src="https://github.com/zi-wa/Neugier/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
-  <img src="https://img.shields.io/badge/tests-356%20offline-0A9EDC?logo=pytest&logoColor=white" alt="356 offline tests">
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+"></a>
   <img src="https://img.shields.io/badge/Claude%20Code-plugin-D97757?logo=claude&logoColor=white" alt="Claude Code plugin">
   <img src="https://img.shields.io/badge/API%20key-not%20required-16A34A" alt="No API key required">
@@ -25,17 +24,26 @@
 
 ## 설치
 
-```powershell
-git clone https://github.com/zi-wa/Neugier.git; cd Neugier
-.\scripts\bootstrap.ps1                       # Linux/macOS: scripts/bootstrap.sh
-.venv\Scripts\python.exe -m harness doctor     # 훅, tectonic, UTF-8, 엔진 점검
+**Linux / macOS / WSL**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zi-wa/Neugier/main/install.sh | sh
 ```
 
-모든 것이 프로젝트 안에 머뭅니다. `.venv`, `bin/tectonic`, `.cache`. 전역 설치도, API 키도, GPU도 필요 없습니다.
+**Windows**
+
+```powershell
+irm https://raw.githubusercontent.com/zi-wa/Neugier/main/install.ps1 | iex
+```
+
+설치 스크립트는 저장소를 `~/Neugier`(`NEUGIER_DIR`로 변경 가능)에 클론하고 부트스트랩을 실행합니다. 만들어지는 것은
+모두 그 폴더 안에 머뭅니다. `.venv`, `bin/tectonic`, `.cache`. 전역 설치도, PATH·프로필 수정도, 관리자 권한 실행도
+없습니다. 수동으로 하려면 `git clone` 후 `scripts/bootstrap.sh`(또는 `.ps1`)를 실행하세요.
 
 ## 빠른 시작
 
 ```powershell
+cd ~/Neugier
 claude --plugin-dir .
 ```
 
@@ -76,7 +84,7 @@ claude --plugin-dir .
 ## 개발
 
 ```powershell
-.venv\Scripts\python.exe -m pytest -m "not live"     # 오프라인 테스트 356개
+.venv\Scripts\python.exe -m pytest -m "not live"     # 오프라인 테스트 361개
 .venv\Scripts\python.exe -m pytest -m live           # 네트워크 테스트 5개
 ```
 

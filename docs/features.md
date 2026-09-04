@@ -199,7 +199,7 @@ next campaign.
 | Reference docs | 8 | proof standards · referee checklist · technique pitfalls · creative moves · curiosity · novelty protocol · goldmine rubric · LaTeX style |
 | Hooks | 6 | `enforce_venv` · `barrier` · `guard_frozen` · `gate_stop` · `gate_subagent` · `inject_context` |
 | Python runtime | 71 modules | ledger, literature cache, exact verifiers, evolutionary search, review machinery, paper compiler, cross-campaign memory |
-| Tests | 356 offline | plus 5 live network tests and the planted-flaw fixture |
+| Tests | 361 offline | plus 5 live network tests and the planted-flaw fixture |
 
 The three commands that carry the design:
 

@@ -7,7 +7,6 @@
 
 <p align="center">
   <a href="https://github.com/zi-wa/Neugier/actions/workflows/tests.yml"><img src="https://github.com/zi-wa/Neugier/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
-  <img src="https://img.shields.io/badge/tests-356%20offline-0A9EDC?logo=pytest&logoColor=white" alt="356 offline tests">
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+"></a>
   <img src="https://img.shields.io/badge/Claude%20Code-plugin-D97757?logo=claude&logoColor=white" alt="Claude Code plugin">
   <img src="https://img.shields.io/badge/API%20key-not%20required-16A34A" alt="No API key required">
@@ -25,17 +24,26 @@ on a lineup of decoys with planted flaws before their verdict is allowed to coun
 
 ## Install
 
-```powershell
-git clone https://github.com/zi-wa/Neugier.git; cd Neugier
-.\scripts\bootstrap.ps1                       # Linux/macOS: scripts/bootstrap.sh
-.venv\Scripts\python.exe -m harness doctor     # hooks, tectonic, UTF-8, engines
+**Linux / macOS / WSL**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zi-wa/Neugier/main/install.sh | sh
 ```
 
-Everything stays inside the project: `.venv`, `bin/tectonic`, `.cache`. No global installs, no API key, no GPU.
+**Windows**
+
+```powershell
+irm https://raw.githubusercontent.com/zi-wa/Neugier/main/install.ps1 | iex
+```
+
+The installer clones the repository into `~/Neugier` (override with `NEUGIER_DIR`) and runs its bootstrap. Everything
+it creates stays inside that directory: `.venv`, `bin/tectonic`, `.cache`. Nothing is installed globally, no PATH or
+profile is touched, nothing runs elevated. By hand instead: `git clone`, then `scripts/bootstrap.sh` (or `.ps1`).
 
 ## Quick start
 
 ```powershell
+cd ~/Neugier
 claude --plugin-dir .
 ```
 
@@ -74,7 +82,7 @@ hops, final-statement re-search, human sign-off) follows from them.
 ## Development
 
 ```powershell
-.venv\Scripts\python.exe -m pytest -m "not live"     # 356 offline tests
+.venv\Scripts\python.exe -m pytest -m "not live"     # 361 offline tests
 .venv\Scripts\python.exe -m pytest -m live           # 5 network tests
 ```
 
