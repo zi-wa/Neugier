@@ -65,6 +65,24 @@ def cmd_repro(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_audit(args: argparse.Namespace) -> int:
+    from harness import CAMPAIGNS
+    from harness.paper.audit import validate_audit, write_sample
+
+    paper_dir = CAMPAIGNS / args.campaign / "paper"
+    if args.action == "sample":
+        out = write_sample(paper_dir, n=args.n, seed=args.seed)
+        counts, _ = validate_audit(paper_dir)
+        print(f"wrote {out} ({counts['n']} sentences to label: supported | refuted | unclear, with an evidence pointer)")
+        return 0
+    counts, issues = validate_audit(paper_dir)
+    print(f"audit: {counts['supported']}/{counts['n']} supported, {counts['refuted']} refuted, {counts['unclear']} unclear, "
+          f"{counts['unlabeled']} unlabeled")
+    for item in issues:
+        print(f"  {item}")
+    return 3 if counts["refuted"] else (1 if counts["unlabeled"] and counts["n"] else 0)
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     from harness import CAMPAIGNS
     from harness.paper.build import render_template
@@ -132,9 +150,16 @@ def main(argv: list[str] | None = None) -> int:
     p_check.add_argument("--strict", action="store_true", help="treat hedge-word findings as errors")
     p_check.set_defaults(func=cmd_check)
 
-    p_repro = sub.add_parser("repro", help="write paper/appendix-repro.tex")
+    p_repro = sub.add_parser("repro", help="write paper/appendix-repro.tex (+ appendix-questions.tex, disclosure.json)")
     p_repro.add_argument("--campaign", required=True, help="campaign slug under campaigns/")
     p_repro.set_defaults(func=cmd_repro)
+
+    p_audit = sub.add_parser("audit", help="sampled accuracy audit: `audit sample` draws sentences, `audit check` scores labels")
+    p_audit.add_argument("action", choices=["sample", "check"])
+    p_audit.add_argument("--campaign", required=True)
+    p_audit.add_argument("--n", type=int, default=30)
+    p_audit.add_argument("--seed", default=None, help="sampling seed (default: campaign slug, so re-runs are identical)")
+    p_audit.set_defaults(func=cmd_audit)
 
     p_init = sub.add_parser("init", help="render the amsart template into a campaign's paper/")
     p_init.add_argument("--campaign", required=True)

@@ -542,6 +542,21 @@ def _check_hedges(text: str, strict: bool, errors: list[Issue], warnings: list[I
         (errors if strict else warnings).append(issue)
 
 
+def _check_audit(paper_dir: Path, strict: bool, errors: list[Issue], warnings: list[Issue]) -> None:
+    """Sampled accuracy audit (paper/audit.json): refuted sentences fail; incomplete/stale audits warn."""
+    try:
+        from harness.paper.audit import validate_audit
+    except ImportError:  # pragma: no cover
+        return
+    _, issues = validate_audit(paper_dir)
+    for item in issues:
+        code, _, msg = item.partition(": ")
+        if code == "E_AUDIT_REFUTED":
+            (errors if strict else warnings).append(Issue(code=code if strict else "W_AUDIT_REFUTED", message=msg))
+        else:
+            warnings.append(Issue(code=code, message=msg))
+
+
 def _check_todo(text: str, warnings: list[Issue]) -> None:
     for m in _TODO_RE.finditer(text):
         warnings.append(
@@ -622,6 +637,7 @@ def check(
     _check_hedges(text, strict, errors, warnings)
     _check_todo(raw, warnings)  # TODO markers count even inside comments
     _check_placeholders(text, errors)
+    _check_audit(paper_dir, strict, errors, warnings)
 
     report = CheckReport(
         ok=len(errors) == 0,
