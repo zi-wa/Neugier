@@ -1,0 +1,33 @@
+{
+  "ids": {
+    "definition": "D-001",
+    "fact": "F-001",
+    "circular": "L-001",
+    "false": "L-002",
+    "theorem": "T-001"
+  },
+  "flaws": {
+    "circular_lemma": {
+      "claim": "L-001",
+      "witness": "proofs/L-001.md Step 1 invokes T-001"
+    },
+    "false_lemma": {
+      "claim": "L-002",
+      "counterexample": "S={0,1,2}",
+      "module": "experiments/falsify/L-002.py"
+    },
+    "unused_hypothesis": {
+      "claim": "T-001",
+      "hypothesis": "S contains 0"
+    },
+    "unverified_citation": {
+      "claim": "F-001",
+      "source": "Freiman1973",
+      "cache": "cache/Freiman1973.txt"
+    },
+    "already_known": {
+      "claim": "T-001",
+      "novelty_class": "1c"
+    }
+  }
+}

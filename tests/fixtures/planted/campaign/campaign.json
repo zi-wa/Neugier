@@ -1,0 +1,27 @@
+{
+  "slug": "planted",
+  "title": "Planted-flaw fixture: sumset lower bound",
+  "created": "2026-09-04T00:00:00+00:00",
+  "phase": "review",
+  "phase_history": [
+    {
+      "phase": "review",
+      "entered": "2026-09-04T00:00:00+00:00",
+      "exited": null
+    }
+  ],
+  "budgets": {
+    "hours_total": 8,
+    "max_review_rounds": 3,
+    "decoys_per_round": 2,
+    "skeptic_passes": 2
+  },
+  "active_targets": [
+    "T-001"
+  ],
+  "outcome_class": null,
+  "statement_hash": null,
+  "notes": "",
+  "frozen": {},
+  "rubric_hashes": {}
+}

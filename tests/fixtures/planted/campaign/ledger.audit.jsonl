@@ -1,0 +1,12 @@
+{"claim_id": "D-001", "detail": "created definition claim", "from": null, "op": "add", "to": "idea", "ts": "2026-09-04T01:36:41.492471+00:00"}
+{"claim_id": "F-001", "detail": "created fact claim", "from": null, "op": "add", "to": "idea", "ts": "2026-09-04T01:36:41.496344+00:00"}
+{"claim_id": "F-001", "detail": "excerpt evidence added", "excerpt_hash": "af381be2c046", "from": null, "op": "add_evidence", "to": "excerpt", "ts": "2026-09-04T01:36:42.285200+00:00", "verified": false}
+{"claim_id": "L-001", "detail": "created lemma claim", "from": null, "op": "add", "to": "idea", "ts": "2026-09-04T01:36:42.288739+00:00"}
+{"claim_id": "L-002", "detail": "created lemma claim", "from": null, "op": "add", "to": "conjectured", "ts": "2026-09-04T01:36:42.294751+00:00"}
+{"claim_id": "T-001", "detail": "created theorem claim", "from": null, "op": "add", "to": "idea", "ts": "2026-09-04T01:36:42.298096+00:00"}
+{"claim_id": "T-001", "detail": "classical statement, planted flaws in the proof", "from": null, "op": "credence", "p_budget": 0.8, "p_pass": null, "p_true": 0.95, "panel": null, "role": "strategist", "round": null, "spread": null, "to": null, "ts": "2026-09-04T01:36:42.301331+00:00"}
+{"claim_id": "L-001", "detail": "circular", "from": null, "op": "add_evidence", "to": "proof", "ts": "2026-09-04T01:36:42.314536+00:00"}
+{"claim_id": "L-001", "detail": "promotion", "from": "idea", "op": "promote", "to": "proof-drafted", "ts": "2026-09-04T01:36:42.318054+00:00"}
+{"claim_id": "T-001", "detail": "planted proof", "from": null, "op": "add_evidence", "to": "proof", "ts": "2026-09-04T01:36:42.340800+00:00"}
+{"claim_id": "T-001", "detail": "n <= 12", "from": null, "op": "add_evidence", "to": "computation", "ts": "2026-09-04T01:36:42.354064+00:00"}
+{"claim_id": "T-001", "detail": "promotion", "from": "idea", "op": "promote", "to": "proof-drafted", "ts": "2026-09-04T01:36:42.357713+00:00"}
