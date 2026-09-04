@@ -27,7 +27,10 @@ def _write(path: Path, text: str) -> None:
 
 
 def _routes(n: int = 5) -> str:
-    return "\n".join(f"## Route {i}: lens {i}" for i in range(1, n + 1))
+    return "\n".join(
+        f"## Route {i}: lens {i}\n- Cheap falsification (≤ 10 min): try n <= 8\n- Credence: p_true=0.3 p_budget=0.2 (strategist) — guess"
+        for i in range(1, n + 1)
+    )
 
 
 def _questions(n: int) -> str:
@@ -194,7 +197,8 @@ def test_check_phase_exit_plan():
     campaign.save(c)
 
     store = LedgerStore(path / "ledger.json", campaign="demo")
-    store.add(kind="target", statement="Target G.", status="conjectured")
+    g = store.add(kind="target", statement="Target G.", status="conjectured")
+    store.record_credence(g.id, role="strategist", why="test", p_true=0.4, p_budget=0.2)
 
     assert campaign.check_phase_exit("demo") == []
 
@@ -213,7 +217,8 @@ def test_check_phase_exit_plan_statement_tampered_after_lock():
     c.budgets = {"max_review_rounds": 3, "hours_total": 40}
     campaign.save(c)
     store = LedgerStore(path / "ledger.json", campaign="demo")
-    store.add(kind="target", statement="Target G.", status="conjectured")
+    g = store.add(kind="target", statement="Target G.", status="conjectured")
+    store.record_credence(g.id, role="strategist", why="test", p_true=0.4, p_budget=0.2)
     assert campaign.check_phase_exit("demo") == []
 
     _write(path / "statement.md", "The target statement, tampered.")
@@ -235,7 +240,8 @@ def test_check_phase_exit_plan_needs_five_routes():
     c.budgets = {"max_review_rounds": 3, "hours_total": 40}
     campaign.save(c)
     store = LedgerStore(path / "ledger.json", campaign="demo")
-    store.add(kind="target", statement="Target G.", status="conjectured")
+    g = store.add(kind="target", statement="Target G.", status="conjectured")
+    store.record_credence(g.id, role="strategist", why="test", p_true=0.4, p_budget=0.2)
 
     unmet = campaign.check_phase_exit("demo")
     assert any("Route" in m for m in unmet)

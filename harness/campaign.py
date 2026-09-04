@@ -520,6 +520,11 @@ def finish(slug: str, outcome: str | None = None) -> dict:
                       paper_path=str(paper) if paper.exists() else None)
     open_q = [q.model_dump() for q in load_doc(campaign_dir).open()]
     added = memory.add_open_questions(slug, open_q)
+    from harness.ledger.calibration import append_to_library, compute as compute_calibration, write_report
+
+    cal = compute_calibration(store, slug, final=True)
+    write_report(campaign_dir, cal)
+    cal_rows = append_to_library(cal)
     if camp.phase != "done":
         set_phase(slug, "done")
     for marker in (".gate", ".gate_attempts"):
@@ -527,7 +532,8 @@ def finish(slug: str, outcome: str | None = None) -> dict:
             (campaign_dir / marker).unlink()
         except OSError:
             pass
-    return {"slug": slug, "outcome_class": camp.outcome_class, "claims": len(claims), "open_questions_recorded": added}
+    return {"slug": slug, "outcome_class": camp.outcome_class, "claims": len(claims), "open_questions_recorded": added,
+            "calibration_rows": cal_rows, "calibration_n": cal.n}
 
 
 # ------------------------------------------------------------- portfolio --
@@ -710,6 +716,17 @@ def check_phase_exit(slug: str) -> list[str]:
         )
         if not has_target:
             unmet.append("ledger has no target/conjecture claim with status >= conjectured")
+        uncred = store.uncredenced()
+        if uncred:
+            unmet.append(
+                f"pre-register credences before spending budget (rule X2): claims without p_true: {uncred} "
+                "(`harness ledger credence <ID> --p-true … --p-budget … --why … --role strategist`)"
+            )
+        from harness.ideas import load_routes
+
+        no_cred = [r.index for r in load_routes(campaign_dir) if r.credence is None or r.credence.p_true is None]
+        if no_cred:
+            unmet.append(f"routes without a '- Credence: p_true=… p_budget=… (role) — why' line: {no_cred}")
 
         if camp.budgets.hours_total is None:
             unmet.append("budgets.hours_total is not set (the strategist must set budgets)")
@@ -927,6 +944,18 @@ def status_report(slug: str) -> str:
     lines += ["", "## Human", "",
               f"- escalations: {hs['used']}/{hs['limit']} used; open: {', '.join(hs['open']) or 'none'}; "
               f"HUMAN.md updated: {hs['human_md_updated'] or 'never'}"]
+
+    from harness.ledger.calibration import compute as compute_calibration
+
+    cal = compute_calibration(store, slug)
+    lines += ["", "## Calibration (pre-registered credences)", ""]
+    if cal.n == 0:
+        lines.append("- no resolved credences yet" + (f"; uncredenced claims: {store.uncredenced()}" if store.uncredenced() else ""))
+    else:
+        for role, st in cal.by_role.items():
+            lines.append(f"- {role}: n={st.n} Brier={st.brier} mean_p={st.mean_p} base_rate={st.base_rate}")
+        for field, st in cal.by_field.items():
+            lines.append(f"- {field}: n={st.n} Brier={st.brier}")
 
     lines += [
         "",

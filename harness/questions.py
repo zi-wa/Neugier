@@ -296,17 +296,41 @@ def detour_budget_minutes(budgets: dict, phase: str) -> float | None:
     return float(hours) * 60.0 * frac
 
 
-def next_actions(doc: QuestionsDoc, budget_left: float | None, top: int = 3) -> dict:
+def _role_of(raised_by: str) -> str:
+    return (raised_by or "").split(",")[0].strip().lower()
+
+
+def calibration_warning(role: str, warn_brier: float = 0.25, min_n: int = 10) -> str | None:
+    """Warn when the role's pooled Brier score across campaigns is poor (Round-2 X2)."""
+    if not role:
+        return None
+    try:
+        from harness.library import memory
+
+        stats = memory.role_brier(role)
+    except Exception:
+        return None
+    if stats["n"] >= min_n and stats["brier"] is not None and stats["brier"] > warn_brier:
+        return f"{role}'s pre-registered credences have Brier {stats['brier']} over {stats['n']} resolved claims (> {warn_brier}); discount its expectation"
+    return None
+
+
+def next_actions(doc: QuestionsDoc, budget_left: float | None, top: int = 3, warn_brier: float = 0.25) -> dict:
     ranked = rank_open(doc)
     items = []
+    warnings: list[str] = []
     for gain, q in ranked[:top]:
+        w = calibration_warning(_role_of(q.raised_by), warn_brier)
+        if w and w not in warnings:
+            warnings.append(w)
         items.append({
             "id": q.id, "title": q.title, "gain": round(gain, 4), "expectation": q.expectation,
             "cheapest_test": q.cheapest_test, "cost_minutes": q.cost_minutes, "stake": q.stake,
             "p_true": q.p_true, "curiosity": f"{q.curiosity}/{q.curiosity_max}", "raised_by": q.raised_by,
             "affordable": budget_left is None or q.cost_minutes <= budget_left,
+            "calibration_warning": w,
         })
-    return {"open": len(doc.open()), "detour_budget_left_minutes": budget_left, "next": items}
+    return {"open": len(doc.open()), "detour_budget_left_minutes": budget_left, "next": items, "warnings": warnings}
 
 
 def hot_surprises_without_followup(doc: QuestionsDoc) -> list[Observation]:
@@ -665,7 +689,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.brief:
             print(top_open_line(cdir))
             return 0
-        _print(next_actions(doc, b["left"], top=args.top))
+        _print(next_actions(doc, b["left"], top=args.top, warn_brier=float(budgets.get("calibration_warn_brier", 0.25))))
         return 0
     if args.cmd == "surprise":
         block = surprise_block(question_id=args.question, title=args.title, prediction=args.prediction,

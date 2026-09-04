@@ -36,6 +36,7 @@ _STORE_FILES = {
     "results": "results.jsonl",
     "facts": "facts.jsonl",
     "questions": "questions.jsonl",
+    "calibration": "calibration.jsonl",
 }
 
 
@@ -200,6 +201,25 @@ def add_open_questions(campaign: str, questions: list[dict[str, Any]], date: str
         existing.add(key)
         n += 1
     return n
+
+
+def add_calibration(campaign: str, role: str, field: str, n: int, brier: float, mean_p: float, base_rate: float,
+                    date: str | None = None) -> dict[str, Any]:
+    """Append one calibration summary row (per campaign, role, field)."""
+    record = {"campaign": campaign, "role": role, "field": field, "n": int(n), "brier": float(brier),
+              "mean_p": float(mean_p), "base_rate": float(base_rate), "date": date or _utc_now_iso()}
+    _append("calibration", record)
+    return record
+
+
+def role_brier(role: str, field: str = "p_true") -> dict[str, Any]:
+    """Pooled Brier score of ``role`` across campaigns: ``{"n": …, "brier": … | None}``."""
+    rows = [r for r in all("calibration") if r.get("role") == role and r.get("field", "p_true") == field]
+    n = sum(int(r.get("n", 0)) for r in rows)
+    if n == 0:
+        return {"n": 0, "brier": None}
+    pooled = sum(float(r.get("brier", 0.0)) * int(r.get("n", 0)) for r in rows) / n
+    return {"n": n, "brier": round(pooled, 4)}
 
 
 def open_questions(query: str | None = None, limit: int = 20) -> list[dict[str, Any]]:

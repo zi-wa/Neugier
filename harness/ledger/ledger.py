@@ -134,6 +134,10 @@ def _resolve_under(campaign_dir: Path, rel_path: str) -> Path:
     return full
 
 
+def round_float(x: float, digits: int = 4) -> float:
+    return float(f"{x:.{digits}f}")
+
+
 def load_budgets(campaign_dir: Path | None) -> dict:
     """``budgets`` from ``campaigns/<slug>/campaign.json`` (pure json; ``{}`` if absent)."""
     if campaign_dir is None:
@@ -449,6 +453,63 @@ class LedgerStore:
                     )
             except (OSError, ValueError):
                 pass
+
+    # --------------------------------------------------------------- credences --
+
+    def record_credence(
+        self,
+        claim_id: str,
+        *,
+        role: str,
+        why: str,
+        p_true: float | None = None,
+        p_budget: float | None = None,
+        p_pass: float | None = None,
+        round: int | None = None,
+        panel: dict[str, float] | None = None,
+    ) -> dict:
+        """Append an immutable pre-registered credence to the claim's history (Round-2 X2)."""
+        if not role.strip():
+            raise LedgerError("credence needs the role that makes the prediction")
+        if not why.strip():
+            raise LedgerError("credence needs a one-line rationale (--why)")
+        vals = {"p_true": p_true, "p_budget": p_budget, "p_pass": p_pass}
+        if all(v is None for v in vals.values()):
+            raise LedgerError("give at least one of p_true, p_budget, p_pass")
+        for k, v in vals.items():
+            if v is not None and not 0.0 <= float(v) <= 1.0:
+                raise LedgerError(f"{k} must be within [0, 1] (got {v})")
+        if p_pass is not None and round is None:
+            raise LedgerError("p_pass needs --round (the review round it predicts)")
+        spread = None
+        if panel:
+            for k, v in panel.items():
+                if not 0.0 <= float(v) <= 1.0:
+                    raise LedgerError(f"panel credence {k}={v} must be within [0, 1]")
+            spread = round_float(max(panel.values()) - min(panel.values()))
+        claim = self.get(claim_id)
+        extra = {"role": role.strip(), "p_true": p_true, "p_budget": p_budget, "p_pass": p_pass, "round": round,
+                 "panel": dict(panel) if panel else None, "spread": spread}
+        entry = self._record(claim, "credence", None, None, why.strip(), extra)
+        self.save()
+        return entry
+
+    def latest_credence(self, claim_id: str, field: str = "p_true") -> dict | None:
+        from harness.ledger.calibration import latest_credence
+
+        return latest_credence(self.get(claim_id), field)
+
+    def uncredenced(self) -> list[str]:
+        """Targets/conjectures/bounds/constructions at >= conjectured without a p_true credence."""
+        from harness.ledger.calibration import latest_credence
+
+        rank = pipeline_rank("conjectured")
+        out = []
+        for c in self.ledger.claims.values():
+            if c.kind in ("target", "conjecture", "bound", "construction") and (pipeline_rank(c.status) or -1) >= rank \
+                    and latest_credence(c, "p_true") is None:
+                out.append(c.id)
+        return sorted(out)
 
     # ------------------------------------------------------------------ stakes --
 
@@ -821,23 +882,34 @@ class LedgerStore:
         return [c for c in self.ledger.claims.values() if c.status in ("referee-passed", "formalized") and not c.stale]
 
     def summary(self) -> dict:
+        from harness.ledger.calibration import latest_credence
+
         by_status: dict[str, int] = {}
         by_kind: dict[str, int] = {}
         stale = 0
+        credences: dict[str, float] = {}
         for c in self.ledger.claims.values():
             by_status[c.status] = by_status.get(c.status, 0) + 1
             by_kind[c.kind] = by_kind.get(c.kind, 0) + 1
             stale += int(c.stale)
-        return {"total": len(self.ledger.claims), "by_status": by_status, "by_kind": by_kind, "stale": stale}
+            cred = latest_credence(c, "p_true")
+            if cred is not None:
+                credences[c.id] = cred["p_true"]
+        return {"total": len(self.ledger.claims), "by_status": by_status, "by_kind": by_kind, "stale": stale,
+                "credences": credences, "uncredenced": self.uncredenced()}
 
     def to_markdown(self) -> str:
-        lines = ["| id | kind | status | stakes | stale | #evidence | statement |", "|---|---|---|---|---|---|---|"]
+        from harness.ledger.calibration import latest_credence
+
+        lines = ["| id | kind | status | stakes | p_true | stale | #evidence | statement |", "|---|---|---|---|---|---|---|---|"]
         for cid in sorted(self.ledger.claims):
             c = self.ledger.claims[cid]
             stmt = c.statement.replace("\n", " ").replace("|", "\\|")
             if len(stmt) > 100:
                 stmt = stmt[:97] + "..."
-            lines.append(f"| {c.id} | {c.kind} | {c.status} | {c.stakes} | {c.stale} | {len(c.evidence)} | {stmt} |")
+            cred = latest_credence(c, "p_true")
+            p = f"{cred['p_true']:.2f}" if cred else "-"
+            lines.append(f"| {c.id} | {c.kind} | {c.status} | {c.stakes} | {p} | {c.stale} | {len(c.evidence)} | {stmt} |")
         return "\n".join(lines) + "\n"
 
     def check_integrity(self, campaign_dir: Path) -> list[str]:

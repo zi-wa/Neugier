@@ -94,6 +94,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_rev = sub.add_parser("reverify", help="clear 'stale' after a fresh complete referee round")
     p_rev.add_argument("id")
 
+    p_cred = sub.add_parser("credence", help="pre-register a credence on a claim (immutable history entry)")
+    p_cred.add_argument("id")
+    p_cred.add_argument("--role", required=True, help="who predicts: strategist | prover | experimentalist | …")
+    p_cred.add_argument("--why", required=True, help="one-line rationale")
+    p_cred.add_argument("--p-true", type=float, default=None, dest="p_true")
+    p_cred.add_argument("--p-budget", type=float, default=None, dest="p_budget")
+    p_cred.add_argument("--p-pass", type=float, default=None, dest="p_pass")
+    p_cred.add_argument("--round", type=int, default=None)
+    p_cred.add_argument("--panel", default=None, help="persona credences, e.g. skeptic=0.2,optimist=0.6,base-rate=0.3")
+
+    p_cal = sub.add_parser("calibration", help="Brier scores of pre-registered credences against resolved claims")
+    p_cal.add_argument("--final", action="store_true", help="treat unresolved claims as not reached within budget and append to library/calibration.jsonl")
+
     p_attest = sub.add_parser("attest", help="record a HUMAN sign-off on a claim (agents are denied by hook)")
     p_attest.add_argument("id")
     p_attest.add_argument("--human", required=True)
@@ -223,6 +236,30 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.cmd == "reverify":
             _print_json(store.reverify(args.id))
+            return 0
+
+        if args.cmd == "credence":
+            panel = None
+            if args.panel:
+                panel = {}
+                for item in args.panel.split(","):
+                    if "=" not in item:
+                        raise LedgerError(f"--panel expects name=p entries, got {item!r}")
+                    k, v = item.split("=", 1)
+                    panel[k.strip()] = float(v)
+            entry = store.record_credence(args.id, role=args.role, why=args.why, p_true=args.p_true, p_budget=args.p_budget,
+                                          p_pass=args.p_pass, round=args.round, panel=panel)
+            _print_json(entry)
+            return 0
+
+        if args.cmd == "calibration":
+            from harness.ledger.calibration import append_to_library, compute, write_report
+
+            report = compute(store, args.campaign, final=args.final)
+            write_report(campaign_dir, report)
+            if args.final:
+                append_to_library(report)
+            _print_json(json.loads(report.model_dump_json(exclude={"rows"})))
             return 0
 
         if args.cmd == "attest":

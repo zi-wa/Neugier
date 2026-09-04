@@ -35,14 +35,16 @@ def _plan_ready(path: Path) -> None:
     _write(path / "statement.md", "The target statement.")
     campaign.lock_statement("demo")
     _write(path / "plan.md", "x" * 1600)
-    _write(path / "ideas.md", "\n".join(f"## Route {i}: lens {i}" for i in range(1, 6)))
+    _write(path / "ideas.md", "\n".join(f"## Route {i}: lens {i}\n- Credence: p_true=0.3 p_budget=0.1 (strategist) — why" for i in range(1, 6)))
     _write(path / "questions.md", "\n".join(f"## Q-{i:03d}: why?\n- Status: open" for i in range(1, 4)))
     _write(path / "experiments" / "statement_tests.py", "def test_def(): assert True\n")
     _write(path / "experiments" / "results.json", json.dumps({"statement_tests": {"passed": True, "n": 1}}))
     c = campaign.load("demo")
     c.budgets = {"max_review_rounds": 3, "hours_total": 40}
     campaign.save(c)
-    LedgerStore(path / "ledger.json", campaign="demo").add(kind="target", statement="G.", status="conjectured")
+    st = LedgerStore(path / "ledger.json", campaign="demo")
+    g = st.add(kind="target", statement="G.", status="conjectured")
+    st.record_credence(g.id, role="strategist", why="test", p_true=0.4)
 
 
 def _referee_pass(store: LedgerStore, cid: str, path: Path, round_: int = 1) -> None:
