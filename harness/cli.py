@@ -17,6 +17,7 @@ COMMANDS = {
     "review": ("harness.review.cli", "review rounds: barrier manifests, blind commits, lineups, round checks"),
     "proof": ("harness.proof.cli", "proof-artifact linter (proof-standards.md) and coverage"),
     "ideas": ("harness.ideas", "attack routes in ideas.md: list, near-duplicate detection, proximity graph"),
+    "prove": ("harness.prove.cli", "sketch tournament: Elo ratings and full-proof selection"),
 }
 
 
