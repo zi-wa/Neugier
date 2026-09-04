@@ -19,6 +19,7 @@ if (-not (Test-Path (Join-Path $Root ".venv\Scripts\python.exe"))) {
 }
 if (-not $SkipDeps) {
   Write-Host "[bootstrap] installing requirements into .venv"
+  uv pip uninstall --python (Join-Path $Root ".venv\Scripts\python.exe") claudemath-harness 2>$null | Out-Null
   uv pip install --python (Join-Path $Root ".venv\Scripts\python.exe") -r (Join-Path $Root "requirements.txt")
   uv pip install --python (Join-Path $Root ".venv\Scripts\python.exe") -e $Root
 }
@@ -47,6 +48,7 @@ foreach ($d in @("agents", "skills")) {
 }
 
 # 4. smoke
-& (Join-Path $Root ".venv\Scripts\python.exe") -c "import sympy, scipy, networkx, z3, pysat, fitz; print('[bootstrap] python deps OK')"
+& (Join-Path $Root ".venv\Scripts\python.exe") -c "import sympy, scipy, networkx, z3, pysat, fitz, pydantic, bibtexparser, requests, yaml, numpy; print('[bootstrap] python deps OK')"
 if (Test-Path $Tectonic) { & $Tectonic --version }
+& (Join-Path $Root ".venv\Scripts\python.exe") -m harness doctor --offline
 Write-Host "[bootstrap] done. Launch with:  claude   (or: claude --plugin-dir .)"

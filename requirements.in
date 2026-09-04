@@ -1,0 +1,22 @@
+# Neugier harness runtime — curated top-level dependencies (installed into .venv only).
+# Regenerate the pinned requirements.txt with:
+#   uv pip compile requirements.in -o requirements.txt --python .venv/Scripts/python.exe
+#
+# Core: exact arithmetic, symbolic checks, solvers, PDFs, bib, HTTP, models, YAML (problems.yaml), tests.
+sympy
+mpmath
+python-sat
+z3-solver
+pymupdf
+bibtexparser
+requests
+pydantic>=2
+pyyaml
+pytest
+pytest-timeout
+# Experiment toolkit for agent-written scripts (documented in CLAUDE.md; not imported by the harness itself
+# except numpy in harness/text/similarity.py).
+numpy
+scipy
+networkx
+matplotlib

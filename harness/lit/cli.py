@@ -140,6 +140,13 @@ def _cmd_excerpt(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_cite_walk(args: argparse.Namespace) -> int:
+    from harness.lit.citewalk import cite_walk
+
+    _print_json(cite_walk(args.seed, direction=args.direction, hops=args.hops, max_n=args.max))
+    return 0
+
+
 def _cmd_resolve(args: argparse.Namespace) -> int:
     entry = bib.resolve(args.query)
     if entry is None:
@@ -215,6 +222,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_excerpt.add_argument("--window", type=int, default=600)
     p_excerpt.add_argument("keywords", nargs="+")
     p_excerpt.set_defaults(func=_cmd_excerpt)
+
+    p_walk = sub.add_parser("cite-walk", help="forward/backward citation walk from a seed work over OpenAlex")
+    p_walk.add_argument("seed", help="arXiv id, DOI or OpenAlex id")
+    p_walk.add_argument("--direction", choices=["cited-by", "references", "both"], default="both")
+    p_walk.add_argument("--hops", type=int, default=1, choices=[1, 2])
+    p_walk.add_argument("--max", type=int, default=50, help="max works per hop")
+    p_walk.set_defaults(func=_cmd_cite_walk)
 
     p_resolve = sub.add_parser("resolve", help="resolve a query (arXiv id/DOI/title) to a BibEntry")
     p_resolve.add_argument("query")

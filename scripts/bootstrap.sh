@@ -20,6 +20,7 @@ if [ ! -x "$PY" ]; then
   if command -v uv >/dev/null 2>&1; then uv venv .venv --python 3.13; else python3 -m venv .venv; fi
 fi
 if command -v uv >/dev/null 2>&1; then
+  uv pip uninstall --python "$PY" claudemath-harness >/dev/null 2>&1 || true
   uv pip install --python "$PY" -r requirements.txt
   uv pip install --python "$PY" -e "$ROOT"
 else
@@ -50,6 +51,7 @@ for d in agents skills; do
 done
 
 # 4. smoke
-"$PY" -c "import sympy, scipy, networkx, z3, pysat, fitz; print('[bootstrap] python deps OK')"
+"$PY" -c "import sympy, scipy, networkx, z3, pysat, fitz, pydantic, bibtexparser, requests, yaml, numpy; print('[bootstrap] python deps OK')"
 ls bin/tectonic* >/dev/null 2>&1 && bin/tectonic* --version || true
+"$PY" -m harness doctor --offline || true
 echo "[bootstrap] done. Launch with:  claude   (or: claude --plugin-dir .)"

@@ -18,6 +18,8 @@ COMMANDS = {
     "proof": ("harness.proof.cli", "proof-artifact linter (proof-standards.md) and coverage"),
     "ideas": ("harness.ideas", "attack routes in ideas.md: list, near-duplicate detection, proximity graph"),
     "prove": ("harness.prove.cli", "sketch tournament: Elo ratings and full-proof selection"),
+    "doctor": ("harness.doctor", "environment and wiring checks (venv, tectonic, hooks, links, engines)"),
+    "headless": ("harness.headless", "drive a campaign with repeated `claude -p` iterations"),
 }
 
 
