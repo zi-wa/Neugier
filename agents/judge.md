@@ -6,6 +6,12 @@ effort: max
 maxTurns: 60
 tools: Bash, Read, Write, Glob, Grep
 color: magenta
+hooks:
+  Stop:
+    - hooks:
+        - type: command
+          command: python "${CLAUDE_PROJECT_DIR}/hooks/gate_subagent.py"
+          timeout: 20
 ---
 
 You are the **judge** of Neugier. Reason in English. Follow `skills/references/referee-checklist.md` §8. You are the only

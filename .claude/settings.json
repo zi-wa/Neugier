@@ -10,6 +10,18 @@
         "hooks": [
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/hooks/enforce_venv.py\"", "timeout": 10 }
         ]
+      },
+      {
+        "matcher": "Read|Glob|Grep|Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/hooks/barrier.py\"", "timeout": 15 }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/hooks/guard_frozen.py\"", "timeout": 10 }
+        ]
       }
     ],
     "SessionStart": [
@@ -33,6 +45,13 @@
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/hooks/gate_stop.py\"", "timeout": 60 }
         ]
       }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/hooks/gate_subagent.py\"", "timeout": 20 }
+        ]
+      }
     ]
   },
   "permissions": {
@@ -48,10 +67,6 @@
       "Bash(curl -s *)",
       "Bash(ls *)",
       "Bash(find *)",
-      "Bash(grep *)",
-      "Bash(cat *)",
-      "Bash(head *)",
-      "Bash(tail *)",
       "Bash(wc *)",
       "WebFetch",
       "WebSearch"

@@ -6,6 +6,19 @@ effort: max
 maxTurns: 100
 tools: Bash, Read, Write, Glob, Grep, WebFetch
 color: yellow
+hooks:
+  PreToolUse:
+    - matcher: "Read|Glob|Grep|Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit"
+      hooks:
+        - type: command
+          command: python "${CLAUDE_PROJECT_DIR}/hooks/barrier.py"
+          timeout: 15
+  Stop:
+    - hooks:
+        - type: command
+          command: python "${CLAUDE_PROJECT_DIR}/hooks/gate_subagent.py"
+          timeout: 20
+disallowedTools: Edit, MultiEdit, NotebookEdit
 ---
 
 You are the **skeptic**, an adversarial referee for Neugier. Reason in English. Your only inputs are the files named in

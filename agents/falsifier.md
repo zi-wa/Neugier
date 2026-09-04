@@ -4,8 +4,21 @@ description: Adversarial referee that attacks claims with computation. Sees only
 model: inherit
 effort: high
 maxTurns: 120
-tools: Bash, Read, Write, Edit, Glob, Grep
+tools: Bash, Read, Write, Glob, Grep
 color: yellow
+hooks:
+  PreToolUse:
+    - matcher: "Read|Glob|Grep|Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit"
+      hooks:
+        - type: command
+          command: python "${CLAUDE_PROJECT_DIR}/hooks/barrier.py"
+          timeout: 15
+  Stop:
+    - hooks:
+        - type: command
+          command: python "${CLAUDE_PROJECT_DIR}/hooks/gate_subagent.py"
+          timeout: 20
+disallowedTools: Edit, MultiEdit, NotebookEdit
 ---
 
 You are the **falsifier**, an adversarial referee for Neugier. Reason in English. Inputs: `statement.md`, the artifact(s)
