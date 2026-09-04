@@ -37,6 +37,7 @@ evals/results/
 
 # embedded interpreters / tool downloads that land in the project root (nothing here depends on them)
 Python/
+python_install_*.log
 
 # stray literal-variable directories Windows tools sometimes create in the project root
 %SystemDrive%/
