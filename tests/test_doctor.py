@@ -15,7 +15,9 @@ def test_doctor_on_this_repo_offline(capsys):
             "link:.claude/agents", "link:.claude/skills", "claude", "git", "library", "campaigns/ACTIVE", "lean", "plugin-evals"} <= names
     by = {c.name: c for c in checks}
     assert by["hooks:hooks/hooks.json"].ok and by["hooks:.claude/settings.json"].ok and by["agent-hooks"].ok
-    assert by["python"].ok and by["venv"].ok
+    assert by["python"].ok
+    # the venv check reports on a developer checkout; CI installs into the runner interpreter instead
+    assert by["venv"].ok or not (harness.ROOT / ".venv").exists()
     assert doctor.main(["--offline", "--json"]) in (0, 1)
     data = json.loads(capsys.readouterr().out)
     assert "checks" in data and any(c["name"] == "lean" for c in data["checks"])

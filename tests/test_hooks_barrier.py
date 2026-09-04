@@ -135,9 +135,11 @@ def test_barrier_decisions_and_log(barrier, monkeypatch, capsys, tmp_path):
     assert rc == 0 and out is None
     rc, out, _ = _run(barrier, monkeypatch, capsys, _payload("Read", "skeptic", root, file_path=str(d / "plan.md")))
     assert _decision(out) == "deny" and "[Neugier barrier]" in out["hookSpecificOutput"]["permissionDecisionReason"]
-    # Windows-style backslashes and mixed case still resolve
-    rc, out, _ = _run(barrier, monkeypatch, capsys, _payload("Read", "skeptic", root, file_path=str(d / "PLAN.md").replace("/", "\\")))
-    assert _decision(out) == "deny"
+    # Windows-style backslashes and mixed case still resolve (on POSIX "\\" is an ordinary character
+    # and the filesystem is case-sensitive, so PLAN.md is genuinely a different file there)
+    if os.name == "nt":
+        rc, out, _ = _run(barrier, monkeypatch, capsys, _payload("Read", "skeptic", root, file_path=str(d / "PLAN.md").replace("/", "\\")))
+        assert _decision(out) == "deny"
     # relative path from cwd
     rc, out, _ = _run(barrier, monkeypatch, capsys, _payload("Read", "skeptic", root, file_path="campaigns/demo/ideas.md"))
     assert _decision(out) == "deny"
