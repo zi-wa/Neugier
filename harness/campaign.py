@@ -244,6 +244,45 @@ def lock_statement(slug: str) -> Campaign:
     frozen = dict(camp.frozen)
     frozen["statement.md"] = _sha256(path)
     camp.frozen = frozen
+    # pre-registered marking schemes written before any proof are frozen with the statement (Round-2 Y2)
+    hashes = dict(camp.rubric_hashes)
+    for rp in sorted((_campaign_dir(slug) / "proofs").glob("*.rubric.md")):
+        hashes[rp.name[: -len(".rubric.md")]] = _sha256(rp)
+    camp.rubric_hashes = hashes
+    save(camp)
+    return camp
+
+
+def add_rubric_hash(slug: str, claim_id: str) -> Campaign:
+    """Freeze ``proofs/<ID>.rubric.md`` for a claim (e.g. a lemma) — refused once a proof for it exists."""
+    from harness.review.rubric import lint_rubric, rubric_path
+
+    camp = load(slug)
+    cdir = _campaign_dir(slug)
+    rp = rubric_path(cdir, claim_id)
+    if not rp.exists():
+        raise CampaignError(f"{rp.name} not found; write the marking scheme first (see harness/review/rubric.py)")
+    if any((cdir / "proofs").glob(f"{claim_id}.md")) or any((cdir / "proofs").glob(f"{claim_id}.*.md")):
+        existing = [p.name for p in (cdir / "proofs").glob(f"{claim_id}*.md") if not p.name.endswith(".rubric.md")]
+        if existing:
+            raise CampaignError(f"a proof for {claim_id} already exists ({existing}); a marking scheme must be pre-registered before the proof")
+    problems = lint_rubric(rp)
+    if problems:
+        raise CampaignError(f"rubric {rp.name} is not acceptable: " + "; ".join(problems))
+    hashes = dict(camp.rubric_hashes)
+    hashes[claim_id] = _sha256(rp)
+    camp.rubric_hashes = hashes
+    save(camp)
+    return camp
+
+
+def set_targets(slug: str, targets: list[str]) -> Campaign:
+    camp = load(slug)
+    store = LedgerStore(_campaign_dir(slug) / "ledger.json", campaign=slug)
+    for t in targets:
+        if t not in store.ledger.claims:
+            raise CampaignError(f"unknown claim id {t!r}")
+    camp.active_targets = list(targets)
     save(camp)
     return camp
 
@@ -315,6 +354,12 @@ def frozen_changed(slug: str) -> list[str]:
             changed.append(f"{rel} (missing)")
         elif _sha256(full) != digest:
             changed.append(rel)
+    for claim_id, digest in camp.rubric_hashes.items():
+        rp = campaign_dir / "proofs" / f"{claim_id}.rubric.md"
+        if not rp.is_file():
+            changed.append(f"proofs/{claim_id}.rubric.md (missing)")
+        elif _sha256(rp) != digest:
+            changed.append(f"proofs/{claim_id}.rubric.md")
     return changed
 
 
@@ -669,6 +714,19 @@ def check_phase_exit(slug: str) -> list[str]:
         if camp.budgets.hours_total is None:
             unmet.append("budgets.hours_total is not set (the strategist must set budgets)")
 
+        from harness.review.rubric import lint_rubric, rubric_path
+
+        for target in camp.active_targets:
+            rp = rubric_path(campaign_dir, target)
+            if not rp.exists():
+                unmet.append(f"active target {target} has no pre-registered marking scheme proofs/{target}.rubric.md (write it before any proof; see technique-pitfalls.md)")
+                continue
+            if target not in camp.rubric_hashes:
+                unmet.append(f"proofs/{target}.rubric.md is not frozen (run lock-statement after writing rubrics, or `campaign add-rubric-hash`)")
+            problems = lint_rubric(rp)
+            if problems:
+                unmet.append(f"proofs/{target}.rubric.md: " + "; ".join(problems))
+
         if not (campaign_dir / "experiments" / "statement_tests.py").exists():
             unmet.append("experiments/statement_tests.py does not exist (definition unit tests of the interpretation lock)")
         ok, why = _statement_tests_passed(campaign_dir)
@@ -934,6 +992,14 @@ def main(argv: list[str] | None = None) -> int:
     p_stakes = sub.add_parser("suggest-stakes", help="suggest a stakes tier for the selected target from portfolio.md (never writes)")
     p_stakes.add_argument("slug")
 
+    p_targets = sub.add_parser("targets", help="show or set the active target claim ids")
+    p_targets.add_argument("slug")
+    p_targets.add_argument("--set", default=None, help="comma-separated claim ids")
+
+    p_rub = sub.add_parser("add-rubric-hash", help="freeze proofs/<ID>.rubric.md (refused once a proof exists)")
+    p_rub.add_argument("slug")
+    p_rub.add_argument("claim")
+
     p_freeze = sub.add_parser("freeze", help="record hashes of files that must not change during explore/prove/review")
     p_freeze.add_argument("slug")
     p_freeze.add_argument("paths", nargs="+")
@@ -1027,6 +1093,19 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.cmd == "suggest-stakes":
             print(json.dumps(suggest_stakes(args.slug), indent=2, sort_keys=True, ensure_ascii=False))
+            return 0
+
+        if args.cmd == "targets":
+            if args.set is not None:
+                camp = set_targets(args.slug, [t.strip() for t in args.set.split(",") if t.strip()])
+            else:
+                camp = load(args.slug)
+            print(json.dumps({"active_targets": camp.active_targets}))
+            return 0
+
+        if args.cmd == "add-rubric-hash":
+            camp = add_rubric_hash(args.slug, args.claim)
+            print(json.dumps({"rubric_hashes": camp.rubric_hashes}, indent=2, sort_keys=True))
             return 0
 
         if args.cmd == "freeze":

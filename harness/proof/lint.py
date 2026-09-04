@@ -377,6 +377,19 @@ def lint_proof(path: Path | str, campaign_dir: Path | str | None = None, store=N
     if "technique" not in fm:
         warnings.append(Issue("W_TECHNIQUE_MISSING", "frontmatter has no 'technique:' tags (used by the marking scheme and pitfalls checklist)"))
 
+    # pre-registered marking scheme cross-check (Round-2 Y2)
+    if campaign_dir is not None and claim_id:
+        from harness.review.rubric import RubricError, check_rubric_against_proof, parse_rubric, rubric_path
+
+        rp = rubric_path(campaign_dir, claim_id)
+        if rp.exists():
+            try:
+                for w in check_rubric_against_proof(parse_rubric(rp), fm):
+                    code, _, msg = w.partition(": ")
+                    warnings.append(Issue(code, msg))
+            except RubricError as exc:
+                warnings.append(Issue("W_RUBRIC_UNREADABLE", str(exc)))
+
     return LintReport(path=str(path), ok=not errors, errors=errors, warnings=warnings, doc=doc)
 
 
