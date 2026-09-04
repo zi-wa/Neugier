@@ -102,7 +102,7 @@ def test_ref_and_label_match_clean() -> None:
     text = "\\begin{theorem}\\label{thm:ok}Statement.\\end{theorem} See~\\ref{thm:ok}."
     _check_refs_labels(text, errors, warnings)
     assert errors == []
-    assert "E_UNUSED_LABEL" not in _codes(warnings)
+    assert "W_UNUSED_LABEL" not in _codes(warnings)
 
 
 def test_unused_label_is_warning() -> None:
@@ -112,7 +112,7 @@ def test_unused_label_is_warning() -> None:
     warnings: list = []
     _check_refs_labels("\\label{thm:unused} Statement.", errors, warnings)
     assert errors == []
-    assert "E_UNUSED_LABEL" in _codes(warnings)
+    assert "W_UNUSED_LABEL" in _codes(warnings)
 
 
 # --------------------------------------------------------------------------
@@ -192,15 +192,23 @@ Statement with nothing backing it.
 
 
 def test_theorem_with_cite_instead_of_proof_passes(tmp_path: Path) -> None:
+    # results quoted from the literature live in a knownresult environment (the \cite loophole is closed)
     tex = r"""
-\begin{theorem}
+\begin{knownresult}
 This is a known result, see \cite{foo2020}.
-\end{theorem}
+\end{knownresult}
 """
     paper_dir = _write_paper(tmp_path, tex)
     report = check(paper_dir, ledger_status={}, results={})
     assert "E_THEOREM_NO_PROOF" not in _codes(report.errors)
     assert "E_CLAIM_UNBOUND" not in _codes(report.errors)
+    tex2 = r"""
+\begin{theorem}
+This is a known result, see \cite{foo2020}.
+\end{theorem}
+"""
+    report2 = check(_write_paper(tmp_path, tex2), ledger_status={}, results={})
+    assert "E_CLAIM_UNBOUND" in _codes(report2.errors)
 
 
 def test_conjecture_exempt_from_proof_requirement(tmp_path: Path) -> None:
@@ -306,7 +314,7 @@ Proof with no key step marked.
 """
     paper_dir = _write_paper(tmp_path, tex)
     report = check(paper_dir, ledger_status={"T-1": "referee-passed"}, results={})
-    assert "W_KEYSTEP_MISSING" in _codes(report.warnings)
+    assert "E_KEYSTEP_MISSING" in _codes(report.errors)
 
 
 def test_keystep_present_silences_warning(tmp_path: Path) -> None:
@@ -321,7 +329,7 @@ Rest of the proof.
 """
     paper_dir = _write_paper(tmp_path, tex)
     report = check(paper_dir, ledger_status={"T-1": "referee-passed"}, results={})
-    assert "W_KEYSTEP_MISSING" not in _codes(report.warnings)
+    assert "E_KEYSTEP_MISSING" not in _codes(report.errors)
 
 
 # --------------------------------------------------------------------------
@@ -439,7 +447,7 @@ def test_hedge_without_cite_or_ref_is_warning(tmp_path: Path) -> None:
 It is well known that widgets commute.
 \end{theorem}
 \begin{proof}
-Proof.
+Proof. \keystep{the new step}
 \end{proof}
 """
     paper_dir = _write_paper(tmp_path, tex)

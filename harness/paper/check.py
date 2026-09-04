@@ -41,9 +41,14 @@ class CheckReport(BaseModel):
 
 # Require a proof-or-citation and a ledger-bound \claim{}.
 THEOREM_LIKE = ("theorem", "lemma", "proposition", "corollary")
+# A referee-passed claim whose dependency DAG is not fully proved (blueprint status != fully_proved).
+CONDITIONAL_ENVS = ("conditional",)
+# A result quoted from the literature: \cite required, optional \claim{F-…} must be known-in-literature.
+KNOWN_ENVS = ("knownresult",)
 # Exempt from the proof requirement and from strict claim-status enforcement.
 EXEMPT_ENVS = ("conjecture", "question")
-ALL_ENVS = THEOREM_LIKE + EXEMPT_ENVS
+ALL_ENVS = THEOREM_LIKE + CONDITIONAL_ENVS + KNOWN_ENVS + EXEMPT_ENVS
+_UNVERIFIED_RE = re.compile(r"\\unverified\b")
 
 _ACCEPTABLE_CLAIM_STATUS = {"referee-passed", "formalized"}
 
@@ -194,8 +199,14 @@ def _sig_digits(raw: str) -> int:
 
 
 def _load_ledger_status(paper_dir: Path) -> dict[str, str]:
+    return {cid: m["status"] for cid, m in _load_ledger_meta(paper_dir).items()}
+
+
+def _load_ledger_meta(paper_dir: Path) -> dict[str, dict]:
+    """``{claim_id: {status, stakes, attested, fully_proved}}`` from the campaign ledger (empty if none)."""
     ledger_path = paper_dir.parent / "ledger.json"
     try:
+        from harness.ledger.graph import blueprint_statuses  # type: ignore
         from harness.ledger.ledger import LedgerStore  # type: ignore
     except ImportError:
         return {}
@@ -204,9 +215,24 @@ def _load_ledger_status(paper_dir: Path) -> dict[str, str]:
     try:
         store = LedgerStore(ledger_path)
         data = store.load()
-        return {cid: claim.status for cid, claim in data.claims.items()}
+        bp = blueprint_statuses(store)
+        return {
+            cid: {
+                "status": claim.status,
+                "stakes": getattr(claim, "stakes", 1),
+                "attested": bool(getattr(claim, "attestation", None)),
+                "fully_proved": bp.get(cid) == "fully_proved",
+                "blueprint": bp.get(cid),
+            }
+            for cid, claim in data.claims.items()
+        }
     except Exception:
         return {}
+
+
+def _meta_from_status(ledger_status: dict[str, str]) -> dict[str, dict]:
+    return {cid: {"status": s, "stakes": 1, "attested": False, "fully_proved": s in _ACCEPTABLE_CLAIM_STATUS}
+            for cid, s in ledger_status.items()}
 
 
 def _load_results(paper_dir: Path, warnings: list[Issue]) -> dict:
@@ -273,7 +299,7 @@ def _check_refs_labels(text: str, errors: list[Issue], warnings: list[Issue]) ->
         if name not in refs:
             warnings.append(
                 Issue(
-                    code="E_UNUSED_LABEL",
+                    code="W_UNUSED_LABEL",
                     message=f"label '{name}' is defined but never referenced",
                     line=line,
                     context=name,
@@ -316,18 +342,34 @@ def _check_theorems_and_claims(
     ledger_status: dict[str, str],
     errors: list[Issue],
     warnings: list[Issue],
+    ledger_meta: dict[str, dict] | None = None,
+    strict: bool = False,
 ) -> None:
+    meta = ledger_meta if ledger_meta is not None else _meta_from_status(ledger_status)
     matches = list(_ENV_RE.finditer(text))
     for idx, m in enumerate(matches):
         env = m.group(1)
         body = m.group(2)
         line = _line_no(text, m.start())
+        claim_m = _CLAIM_RE.search(body)
+        cid = claim_m.group(1).strip() if claim_m else None
+        has_cite_in_body = bool(_CITE_ANY_RE.search(body))
 
-        if env in THEOREM_LIKE:
+        if env in KNOWN_ENVS:
+            if not has_cite_in_body:
+                errors.append(Issue(code="E_KNOWNRESULT_NO_CITE", message=f"knownresult at line {line} must \\cite its source", line=line, context=env))
+            if cid is not None:
+                status = ledger_status.get(cid)
+                if status is None:
+                    errors.append(Issue(code="E_CLAIM_UNKNOWN", message=f"\\claim{{{cid}}} in knownresult at line {line} is not present in the ledger", line=line, context=cid))
+                elif status != "known-in-literature":
+                    errors.append(Issue(code="E_CLAIM_STATUS", message=f"\\claim{{{cid}}} in knownresult at line {line} has status '{status}', not known-in-literature", line=line, context=cid))
+            continue
+
+        if env in THEOREM_LIKE or env in CONDITIONAL_ENVS:
             next_start = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
             between = text[m.end() : next_start]
             has_proof = bool(_PROOF_RE.search(between))
-            has_cite_in_body = bool(_CITE_ANY_RE.search(body))
             if not has_proof and not has_cite_in_body:
                 errors.append(
                     Issue(
@@ -337,54 +379,77 @@ def _check_theorems_and_claims(
                         context=env,
                     )
                 )
-
-            claim_m = _CLAIM_RE.search(body)
-            if claim_m:
-                cid = claim_m.group(1).strip()
-                status = ledger_status.get(cid)
-                if status is None:
-                    errors.append(
-                        Issue(
-                            code="E_CLAIM_UNKNOWN",
-                            message=f"\\claim{{{cid}}} in {env} at line {line} is not present in the ledger",
-                            line=line,
-                            context=cid,
-                        )
-                    )
-                elif status not in _ACCEPTABLE_CLAIM_STATUS:
-                    errors.append(
-                        Issue(
-                            code="E_CLAIM_STATUS",
-                            message=(
-                                f"\\claim{{{cid}}} in {env} at line {line} has ledger status "
-                                f"'{status}', not in {sorted(_ACCEPTABLE_CLAIM_STATUS)}"
-                            ),
-                            line=line,
-                            context=cid,
-                        )
-                    )
-            elif not has_cite_in_body:
+            if cid is None:
                 errors.append(
                     Issue(
                         code="E_CLAIM_UNBOUND",
-                        message=f"{env} at line {line} asserts a new result without \\claim{{}} or \\cite{{}}",
+                        message=(
+                            f"{env} at line {line} is not bound to a ledger claim with \\claim{{}}; results quoted from the "
+                            "literature belong in a knownresult environment"
+                        ),
                         line=line,
                         context=env,
+                    )
+                )
+                continue
+            status = ledger_status.get(cid)
+            if status is None:
+                errors.append(Issue(code="E_CLAIM_UNKNOWN", message=f"\\claim{{{cid}}} in {env} at line {line} is not present in the ledger", line=line, context=cid))
+                continue
+            if status not in _ACCEPTABLE_CLAIM_STATUS:
+                errors.append(
+                    Issue(
+                        code="E_CLAIM_STATUS",
+                        message=(
+                            f"\\claim{{{cid}}} in {env} at line {line} has ledger status "
+                            f"'{status}', not in {sorted(_ACCEPTABLE_CLAIM_STATUS)}"
+                        ),
+                        line=line,
+                        context=cid,
+                    )
+                )
+                continue
+            info = meta.get(cid, {})
+            fully = bool(info.get("fully_proved", True))
+            if env in THEOREM_LIKE and not fully:
+                errors.append(
+                    Issue(
+                        code="E_CLAIM_NOT_FULLY_PROVED",
+                        message=(
+                            f"\\claim{{{cid}}} in {env} at line {line} is referee-passed but its dependency graph is not fully "
+                            f"proved (blueprint status {info.get('blueprint', 'proved')!r}); use \\begin{{conditional}}"
+                        ),
+                        line=line,
+                        context=cid,
+                    )
+                )
+            elif env in CONDITIONAL_ENVS and fully:
+                warnings.append(Issue(code="W_CONDITIONAL_UNNEEDED", message=f"\\claim{{{cid}}} at line {line} is fully proved; a plain theorem environment would do", line=line, context=cid))
+            if strict and int(info.get("stakes", 1) or 1) == 2 and not info.get("attested") and not _UNVERIFIED_RE.search(body):
+                errors.append(
+                    Issue(
+                        code="E_HUMAN_ATTEST",
+                        message=(
+                            f"\\claim{{{cid}}} at line {line} has stakes 2 (extraordinary claim) and no human attestation; "
+                            "mark it \\unverified{} or record `harness campaign attest`"
+                        ),
+                        line=line,
+                        context=cid,
                     )
                 )
         # EXEMPT_ENVS (conjecture/question): proof not required; any claim
         # status is acceptable; claims never need to exist at all.
 
 
-def _check_keystep(text: str, ledger_status: dict[str, str], warnings: list[Issue]) -> None:
+def _check_keystep(text: str, ledger_status: dict[str, str], errors: list[Issue]) -> None:
     claim_ids = set(_CLAIM_RE.findall(text))
-    any_referee_passed_bound = any(ledger_status.get(cid) == "referee-passed" for cid in claim_ids)
+    any_asserted = any(ledger_status.get(cid) in _ACCEPTABLE_CLAIM_STATUS for cid in claim_ids)
     has_keystep = bool(_KEYSTEP_RE.search(text))
-    if any_referee_passed_bound and not has_keystep:
-        warnings.append(
+    if any_asserted and not has_keystep:
+        errors.append(
             Issue(
-                code="W_KEYSTEP_MISSING",
-                message="the ledger has a referee-passed claim bound in the paper but no \\keystep{} marks the new argument",
+                code="E_KEYSTEP_MISSING",
+                message="the paper asserts a referee-passed/formalized claim but no \\keystep{} marks the genuinely new argument",
             )
         )
 
@@ -511,6 +576,8 @@ def check(
     ledger_status: dict[str, str] | None = None,
     results: dict | None = None,
     strict: bool = False,
+    ledger_meta: dict[str, dict] | None = None,
+    fully_proved: set[str] | None = None,
 ) -> CheckReport:
     """Run all lint rules over ``paper_dir/main.tex`` and write ``check.json``."""
     paper_dir = Path(paper_dir)
@@ -538,12 +605,19 @@ def check(
     if results is None:
         results = _load_results(paper_dir, warnings)
     if ledger_status is None:
-        ledger_status = _load_ledger_status(paper_dir)
+        if ledger_meta is None:
+            ledger_meta = _load_ledger_meta(paper_dir)
+        ledger_status = {cid: m["status"] for cid, m in ledger_meta.items()}
+    elif ledger_meta is None:
+        ledger_meta = _meta_from_status(ledger_status)
+    if fully_proved is not None:
+        for cid, m in ledger_meta.items():
+            m["fully_proved"] = cid in fully_proved
 
     _check_refs_labels(text, errors, warnings)
     _check_cites(text, bib_entries, errors, warnings)
-    _check_theorems_and_claims(text, ledger_status, errors, warnings)
-    _check_keystep(text, ledger_status, warnings)
+    _check_theorems_and_claims(text, ledger_status, errors, warnings, ledger_meta, strict)
+    _check_keystep(text, ledger_status, errors)
     _check_numbers(text, results, errors)
     _check_hedges(text, strict, errors, warnings)
     _check_todo(raw, warnings)  # TODO markers count even inside comments

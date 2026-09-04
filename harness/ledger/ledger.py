@@ -562,6 +562,8 @@ class LedgerStore:
             if dep_id in assumed:
                 continue
             dep = self.ledger.claims.get(dep_id)
+            if dep is not None and dep.kind == "definition":
+                continue  # definitions are pinned by the interpretation lock, not proved
             got = dep.status if dep is not None else "missing"
             if dep is None or dep.status not in allowed:
                 problems.append(f"{dep_id} (status={got}, needs one of {sorted(allowed)})")

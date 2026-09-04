@@ -18,6 +18,12 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("file", help="campaign-relative or absolute path to proofs/<ID>.md")
     c.add_argument("--campaign", default=None, help="campaign slug (enables ledger/cite/results resolution)")
     c.add_argument("--json", action="store_true")
+    cv = sub.add_parser("coverage", help="verification coverage of a claim's proof (skeptic steps, cites, numerics, lemmas)")
+    cv.add_argument("claim")
+    cv.add_argument("--campaign", required=True)
+    cv.add_argument("--round", type=int, default=None)
+    cv.add_argument("--min-verified", type=float, default=None, help="exit 3 when the skeptic-verified fraction (0-1) is below this")
+    cv.add_argument("--json", action="store_true")
     return p
 
 
@@ -44,6 +50,22 @@ def main(argv: list[str] | None = None) -> int:
                 loc = f" line {w.line}" if w.line else ""
                 print(f"  [WARN  {w.code}]{loc} {w.message}")
         return 0 if report.ok else 1
+    if args.cmd == "coverage":
+        from harness.proof.coverage import compute_coverage, write_coverage
+
+        campaign_dir = CAMPAIGNS / args.campaign
+        cov = compute_coverage(campaign_dir, args.claim, args.round)
+        out = write_coverage(campaign_dir, cov)
+        if args.json:
+            print(json.dumps(cov.to_dict(), ensure_ascii=False, indent=2))
+        else:
+            print(f"coverage {args.claim} (round {cov.round}): {cov.summary_line()}")
+            for w in cov.warnings:
+                print(f"  [WARN] {w}")
+            print(f"  wrote {out}")
+        if args.min_verified is not None and cov.steps_total and (cov.steps_verified_by_skeptic / cov.steps_total) < args.min_verified:
+            return 3
+        return 0
     return 2
 
 

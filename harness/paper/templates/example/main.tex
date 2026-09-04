@@ -17,6 +17,8 @@
 \newtheorem{proposition}[theorem]{Proposition}
 \newtheorem{corollary}[theorem]{Corollary}
 \newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{conditional}[theorem]{Conditional Theorem}
+\newtheorem{knownresult}[theorem]{Known Result}
 
 \theoremstyle{definition}
 \newtheorem{definition}[theorem]{Definition}
@@ -27,6 +29,9 @@
 \newtheorem{remark}[theorem]{Remark}
 
 \newcommand{\claim}[1]{}
+
+% \unverified{}: an extraordinary (stakes 2) claim that no human has yet attested.
+\newcommand{\unverified}{\textsuperscript{$\circ$}\,\textit{(not yet human-verified)}}
 \newcommand{\keystep}[1]{\par\noindent\colorbox{yellow!20}{\parbox{\dimexpr\linewidth-2\fboxsep}{\textbf{Key new step.} #1}}\par}
 \newcommand{\numref}[1]{\texttt{#1}}
 \newcommand{\assumes}[1]{\textbf{Assumption:} #1}

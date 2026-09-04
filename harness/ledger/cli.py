@@ -122,7 +122,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("assertable", help="list claims the paper may assert as theorems")
     sub.add_parser("summary", help="print counts by status/kind")
     sub.add_parser("check", help="verify evidence file hashes are unchanged")
-    sub.add_parser("graph", help="print the dependency DAG")
+    p_graph = sub.add_parser("graph", help="print the dependency DAG (blueprint statuses; text | mermaid | dot)")
+    p_graph.add_argument("--format", default="text", choices=["text", "mermaid", "dot"])
+    p_graph.add_argument("--out", default=None, help="write to this file instead of stdout")
+    p_graph.add_argument("--no-statements", action="store_true", help="mermaid: ids only")
 
     return parser
 
@@ -310,10 +313,19 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.cmd == "graph":
-            dag = store.dag()
-            for cid in store.topological_order():
-                node = dag[cid]
-                print(f"{cid} [{node['kind']}/{node['status']}] depends_on={node['depends_on']}")
+            from harness.ledger.graph import render_dot, render_mermaid, render_text
+
+            if args.format == "mermaid":
+                text = render_mermaid(store, statements=not args.no_statements)
+            elif args.format == "dot":
+                text = render_dot(store)
+            else:
+                text = render_text(store)
+            if args.out:
+                Path(args.out).write_text(text, encoding="utf-8")
+                print(f"wrote {args.out}")
+            else:
+                print(text, end="")
             return 0
 
         return 2
