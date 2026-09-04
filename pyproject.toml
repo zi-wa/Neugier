@@ -16,6 +16,9 @@ neugier = "harness.cli:main"
 [tool.setuptools.packages.find]
 include = ["harness*"]
 
+[tool.setuptools.package-data]
+harness = ["review/fixtures/*.md", "paper/templates/*.tex", "paper/templates/**/*.tex", "verify/examples/*.py"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

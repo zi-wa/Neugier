@@ -392,6 +392,8 @@ class LedgerStore:
                 raise LedgerError("verdict 'n/a' is allowed only for role 'replicator' (nothing to replicate)")
             if evidence.reliability is not None and not 0.0 <= evidence.reliability <= 1.0:
                 raise LedgerError("reliability must be within [0, 1]")
+            if evidence.role == "skeptic" and evidence.round is not None:
+                self._check_lineup_evidence(evidence, campaign_dir)
 
         if evidence.path is not None:
             full = _resolve_under(campaign_dir, evidence.path)
@@ -410,6 +412,43 @@ class LedgerStore:
         )
         self.save()
         return claim
+
+    @staticmethod
+    def _check_lineup_evidence(evidence: Evidence, campaign_dir: Path) -> None:
+        """Under a decoy-lineup round a skeptic verdict must carry its lineup score (Round-2 X1)."""
+        manifest_path = Path(campaign_dir) / "reviews" / f"round{evidence.round}" / "barrier.json"
+        if not manifest_path.exists():
+            return
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as fh:
+                manifest = json.load(fh)
+        except (OSError, ValueError):
+            return
+        if not manifest.get("lineup"):
+            return
+        if not evidence.agent_id:
+            raise LedgerError("skeptic evidence under a lineup round needs --agent-id (the fresh context that was scored)")
+        if evidence.reliability is None:
+            raise LedgerError("skeptic evidence under a lineup round needs --reliability from `harness review score-lineup`")
+        min_recall = float(load_budgets(campaign_dir).get("lineup_min_recall", 0.8))
+        expected = evidence.reliability >= min_recall
+        if evidence.admissible is None:
+            evidence.admissible = expected
+        elif evidence.admissible != expected:
+            raise LedgerError(
+                f"admissible={evidence.admissible} contradicts reliability {evidence.reliability} vs lineup_min_recall {min_recall}"
+            )
+        score_path = Path(campaign_dir) / "reviews" / f"round{evidence.round}" / f"lineup_score.{evidence.agent_id}.json"
+        if score_path.exists():
+            try:
+                with open(score_path, "r", encoding="utf-8") as fh:
+                    recorded = json.load(fh)
+                if abs(float(recorded.get("reliability", -1)) - float(evidence.reliability)) > 1e-6:
+                    raise LedgerError(
+                        f"reliability {evidence.reliability} does not match {score_path.name} ({recorded.get('reliability')})"
+                    )
+            except (OSError, ValueError):
+                pass
 
     # ------------------------------------------------------------------ stakes --
 
