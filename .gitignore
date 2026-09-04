@@ -34,3 +34,8 @@ Thumbs.db
 
 # eval workspaces and results (regenerated)
 evals/results/
+
+# stray literal-variable directories Windows tools sometimes create in the project root
+%SystemDrive%/
+%USERPROFILE%/
+${*}/
