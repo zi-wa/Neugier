@@ -290,7 +290,9 @@ def test_check_phase_exit_review_full_pass():
     store.add_evidence(claim.id, Evidence(type="proof", path="proofs/thm.tex", summary="draft"), path)
     store.promote(claim.id, "proof-drafted", path)
     for role in REFEREE_ROLES:
-        store.add_evidence(claim.id, Evidence(type="referee", role=role, verdict="pass", round=1, summary="ok"), path)
+        store.add_evidence(claim.id, Evidence(type="referee", role=role, verdict="pass", round=1, summary="ok",
+                                              agent_id="SK-1" if role == "skeptic" else None), path)
+    store.add_evidence(claim.id, Evidence(type="referee", role="skeptic", verdict="pass", round=1, summary="ok", agent_id="SK-2"), path)
 
     unmet = campaign.check_phase_exit("demo")
     assert any("round1" in m for m in unmet)  # review files missing

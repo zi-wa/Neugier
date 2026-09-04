@@ -479,19 +479,25 @@ class LedgerStore:
         skeptics = [ev for ev in evidences if ev.role == "skeptic" and ev.admissible is not False]
         passes = [ev for ev in skeptics if ev.verdict == "pass"]
         dissent = [ev for ev in skeptics if ev.verdict in ("fail", "revise")]
-        distinct = {ev.agent_id if ev.agent_id else f"#{i}" for i, ev in enumerate(passes)}
+        # distinct fresh contexts: named agent_ids count separately; anonymous passes count as one
+        distinct = {ev.agent_id for ev in passes if ev.agent_id}
+        if any(not ev.agent_id for ev in passes):
+            distinct.add("#anonymous")
         if dissent:
             missing.append(f"skeptic unanimity broken ({len(dissent)} admissible skeptic verdict(s) not 'pass')")
-        if len(passes) < skeptic_passes or len(distinct) < skeptic_passes:
-            missing.append(f"{skeptic_passes} admissible skeptic pass(es) from distinct agent_ids (have {len(distinct)})")
+        if len(distinct) < skeptic_passes:
+            missing.append(
+                f"{skeptic_passes} admissible skeptic pass(es) from distinct agent_ids (have {len(distinct)}; "
+                "the regime for this claim's stakes decides k — see `harness review regime`)"
+            )
         for role in ("falsifier", "novelty", "judge"):
             if not any(ev.role == role and ev.verdict == "pass" for ev in evidences):
                 missing.append(f"{role} pass")
         rep = [ev for ev in evidences if ev.role == "replicator"]
-        if not rep:
-            missing.append("replicator pass" + ("" if replicator_required else " (or n/a)"))
-        elif not any(ev.verdict == "pass" or (ev.verdict == "n/a" and not replicator_required) for ev in rep):
-            missing.append("replicator pass" + ("" if replicator_required else " (or n/a)"))
+        if replicator_required and not rep:
+            missing.append("replicator verdict (pass, or n/a when there is nothing to replicate)")
+        elif rep and not any(ev.verdict in ("pass", "n/a") for ev in rep):
+            missing.append("replicator pass (or n/a)")
         return missing
 
     def _referee_round_complete(
@@ -551,13 +557,24 @@ class LedgerStore:
         if new_status == "referee-passed":
             if claim.status != "proof-drafted":
                 missing.append(f"current status must be 'proof-drafted' to submit for referee (is {claim.status!r})")
-            round_ok, round_missing = self._referee_round_complete(claim)
+            from harness.review.regime import regime_for  # stakes-scaled scrutiny (Round-2 X4)
+
+            regime = regime_for(claim.stakes, load_budgets(campaign_dir))
+            round_ok, round_missing = self._referee_round_complete(
+                claim, skeptic_passes=regime.skeptic_passes, replicator_required=regime.replicator_required,
+            )
             if round_ok is None:
                 missing.append(
-                    "requires a complete referee round (skeptic/falsifier/novelty/replicator verdict='pass' "
-                    "— replicator may be 'n/a' — plus a judge pass, all in the same round); missing: "
-                    + ", ".join(round_missing)
+                    f"requires a complete referee round under {regime.describe()} "
+                    "(all in the same round, plus a judge pass); missing: " + ", ".join(round_missing)
                 )
+            else:
+                from harness.review.barrier import check_round, manifest_path  # lazy: review must not import ledger at import time
+
+                if manifest_path(campaign_dir, round_ok).exists():
+                    for problem in check_round(campaign_dir, round_ok, self):
+                        if not problem.startswith("ledger integrity"):
+                            missing.append(f"review round {round_ok}: {problem}")
             dep_problems = self._unmet_dependency_statuses(claim, DEPENDS_OK_FOR_REFEREE_PASSED)
             if dep_problems:
                 missing.append(

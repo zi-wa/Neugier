@@ -189,7 +189,9 @@ def test_campaign_review_gate_uses_check_round(tmp_path, monkeypatch):
     store.add_evidence(thm.id, Evidence(type="proof", path="proofs/T-001.md"), path)
     store.promote(thm.id, "proof-drafted", path)
     for role in ("skeptic", "falsifier", "novelty", "replicator", "judge"):
-        store.add_evidence(thm.id, Evidence(type="referee", role=role, verdict="pass", round=1), path)
+        store.add_evidence(thm.id, Evidence(type="referee", role=role, verdict="pass", round=1,
+                                            agent_id="SK-1" if role == "skeptic" else None), path)
+    store.add_evidence(thm.id, Evidence(type="referee", role="skeptic", verdict="pass", round=1, agent_id="SK-2"), path)
     for f in ("skeptic.md", "falsifier.md", "novelty.md", "judge.md"):
         _write(path / "reviews" / "round1" / f, "notes\nVERDICT: PASS\n")
     store.promote(thm.id, "referee-passed", path)

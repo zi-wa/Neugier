@@ -498,6 +498,52 @@ def selected_target_statement(campaign_dir: Path) -> str | None:
     return s.group(1).strip() if s else None
 
 
+def suggest_stakes(slug: str) -> dict:
+    """Suggest a stakes tier (0/1/2) for the selected target from ``portfolio.md`` (Round-2 X4).
+
+    Heuristics, all visible in the returned ``reasons``: tier 2 when the selected target block mentions
+    a prize, a listed open problem (erdosproblems / formal-conjectures / Open Problem Garden ids) or a
+    tracked best-known value, or when the rubric's N (novelty/impact) score is 3; tier 0 when the
+    target is a lemma-sized routine statement (N ≤ 1); otherwise tier 1. Never writes anything.
+    """
+    campaign_dir = _campaign_dir(slug)
+    text = _read_text(campaign_dir / "portfolio.md") or ""
+    m = re.search(r"^##\s*Selected target(.*?)(?=^##\s|\Z)", text, re.DOTALL | re.MULTILINE)
+    block = m.group(1) if m else text
+    reasons: list[str] = []
+    score = 1
+    low = block.lower()
+    if re.search(r"\bprize\b|\$\s?\d+", low):
+        reasons.append("prize mentioned")
+        score = 2
+    if re.search(r"erd[oő]s\s*#?\d+|erdosproblems|formal-conjectures|open problem garden|\bopg\b", low):
+        reasons.append("listed open problem")
+        score = 2
+    if re.search(r"known best result[^\n]*:\s*\S", block, re.IGNORECASE) and re.search(r"\d", re.search(r"known best result[^\n]*", block, re.IGNORECASE).group(0)):
+        reasons.append("tracked best-known value")
+        score = 2
+    n_score = None
+    tbl = re.search(r"^##\s*Rubric scores(.*?)(?=^##\s|\Z)", text, re.DOTALL | re.MULTILINE)
+    if tbl:
+        for row in tbl.group(1).splitlines():
+            cells = [c.strip() for c in row.strip().strip("|").split("|")]
+            if len(cells) >= 8 and cells[0] and cells[0].lower() not in ("candidate", "---") and not set(cells[0]) <= {"-"}:
+                try:
+                    n_score = int(cells[3])
+                except ValueError:
+                    continue
+                break
+    if n_score is not None:
+        reasons.append(f"rubric N score {n_score}")
+        if n_score >= 3:
+            score = 2
+        elif n_score <= 1 and score < 2:
+            score = 0
+    if not reasons:
+        reasons.append("no signal in portfolio.md; default tier 1")
+    return {"suggested_stakes": score, "reasons": reasons, "apply_with": f"harness ledger update <ID> --stakes {score} --campaign {slug}"}
+
+
 # --------------------------------------------------------------- phase exit --
 
 def _statement_tests_passed(campaign_dir: Path) -> tuple[bool, str]:
@@ -879,6 +925,15 @@ def main(argv: list[str] | None = None) -> int:
     p_finish.add_argument("slug")
     p_finish.add_argument("--outcome", choices=list(OUTCOME_CLASSES), default=None)
 
+    p_attest = sub.add_parser("attest", help="record a HUMAN sign-off on a claim (agents are denied by hook)")
+    p_attest.add_argument("slug")
+    p_attest.add_argument("--claim", required=True)
+    p_attest.add_argument("--human", required=True)
+    p_attest.add_argument("--note", default="")
+
+    p_stakes = sub.add_parser("suggest-stakes", help="suggest a stakes tier for the selected target from portfolio.md (never writes)")
+    p_stakes.add_argument("slug")
+
     p_freeze = sub.add_parser("freeze", help="record hashes of files that must not change during explore/prove/review")
     p_freeze.add_argument("slug")
     p_freeze.add_argument("paths", nargs="+")
@@ -962,6 +1017,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "outcome":
             camp = set_outcome(args.slug, args.outcome)
             print(f"{args.slug}: outcome_class -> {camp.outcome_class}")
+            return 0
+
+        if args.cmd == "attest":
+            store = LedgerStore(_campaign_dir(args.slug) / "ledger.json", campaign=args.slug)
+            claim = store.attest(args.claim, args.human, args.note)
+            print(json.dumps({"claim": claim.id, "attestation": claim.attestation}, indent=2, sort_keys=True))
+            return 0
+
+        if args.cmd == "suggest-stakes":
+            print(json.dumps(suggest_stakes(args.slug), indent=2, sort_keys=True, ensure_ascii=False))
             return 0
 
         if args.cmd == "freeze":

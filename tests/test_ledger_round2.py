@@ -40,7 +40,9 @@ def _round(store: LedgerStore, cid: str, d: Path, round_: int = 1, replicator: s
     for role in REFEREE_ROUND_ROLES:
         verdict = replicator if role == "replicator" else "pass"
         verdict = overrides.get(role, verdict)
-        store.add_evidence(cid, Evidence(type="referee", role=role, verdict=verdict, round=round_, summary="r"), d)
+        agent = "SK-1" if role == "skeptic" else None
+        store.add_evidence(cid, Evidence(type="referee", role=role, verdict=verdict, round=round_, summary="r", agent_id=agent), d)
+    store.add_evidence(cid, Evidence(type="referee", role="skeptic", verdict="pass", round=round_, summary="r", agent_id="SK-2"), d)
 
 
 EXCERPT = "For every finite set S of integers with at least two elements, |S+S| >= 2|S| - 1."
@@ -116,7 +118,8 @@ def test_referee_round_requires_replicator(tmp_path):
     claim = store.add(kind="theorem", statement="T.")
     _proof_drafted(store, claim.id, d)
     for role in ("skeptic", "falsifier", "novelty", "judge"):
-        store.add_evidence(claim.id, Evidence(type="referee", role=role, verdict="pass", round=1), d)
+        store.add_evidence(claim.id, Evidence(type="referee", role=role, verdict="pass", round=1, agent_id="SK-1" if role == "skeptic" else None), d)
+    store.add_evidence(claim.id, Evidence(type="referee", role="skeptic", verdict="pass", round=1, agent_id="SK-2"), d)
     with pytest.raises(LedgerError, match="replicator"):
         store.promote(claim.id, "referee-passed", d)
     store.add_evidence(claim.id, Evidence(type="referee", role="replicator", verdict="n/a", round=1), d)

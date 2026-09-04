@@ -38,9 +38,12 @@ def _promote_to_proof_drafted(store: LedgerStore, claim_id: str, d: Path):
 
 def _referee_pass_round(store: LedgerStore, claim_id: str, d: Path, round_: int = 1) -> None:
     for role in REFEREE_ROLES:
+        agent = "SK-1" if role == "skeptic" else None
         store.add_evidence(
-            claim_id, Evidence(type="referee", role=role, verdict="pass", round=round_, summary="ok"), d
+            claim_id, Evidence(type="referee", role=role, verdict="pass", round=round_, summary="ok", agent_id=agent), d
         )
+    # the default regime (stakes 1) wants two skeptic passes from distinct fresh contexts
+    store.add_evidence(claim_id, Evidence(type="referee", role="skeptic", verdict="pass", round=round_, summary="ok", agent_id="SK-2"), d)
 
 
 # --------------------------------------------------------------- id generation --
@@ -283,7 +286,8 @@ def test_promote_referee_passed_requires_full_round_and_judge(tmp_path):
     thm = store.add(kind="theorem", statement="Theorem needing review.")
     _promote_to_proof_drafted(store, thm.id, d)
 
-    store.add_evidence(thm.id, Evidence(type="referee", role="skeptic", verdict="pass", round=1, summary="ok"), d)
+    store.add_evidence(thm.id, Evidence(type="referee", role="skeptic", verdict="pass", round=1, summary="ok", agent_id="SK-1"), d)
+    store.add_evidence(thm.id, Evidence(type="referee", role="skeptic", verdict="pass", round=1, summary="ok", agent_id="SK-2"), d)
     store.add_evidence(thm.id, Evidence(type="referee", role="falsifier", verdict="pass", round=1, summary="ok"), d)
     with pytest.raises(LedgerError):
         store.promote(thm.id, "referee-passed", d)

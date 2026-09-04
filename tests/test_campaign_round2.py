@@ -47,7 +47,9 @@ def _plan_ready(path: Path) -> None:
 
 def _referee_pass(store: LedgerStore, cid: str, path: Path, round_: int = 1) -> None:
     for role in ROLES:
-        store.add_evidence(cid, Evidence(type="referee", role=role, verdict="pass", round=round_), path)
+        store.add_evidence(cid, Evidence(type="referee", role=role, verdict="pass", round=round_,
+                                         agent_id="SK-1" if role == "skeptic" else None), path)
+    store.add_evidence(cid, Evidence(type="referee", role="skeptic", verdict="pass", round=round_, agent_id="SK-2"), path)
 
 
 def _proof_drafted(store: LedgerStore, cid: str, path: Path) -> None:
