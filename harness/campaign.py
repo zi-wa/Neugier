@@ -1,10 +1,21 @@
-"""Campaign lifecycle: create/load/save, phase transitions, and phase-exit gates.
+"""Campaign lifecycle: create/load/save, phase transitions, budgets, frozen files,
+outcome validation and phase-exit gates.
 
 A "campaign" (``campaigns/<slug>/``) is a portfolio of targets pursued under a
 budget through the phase protocol described in CLAUDE.md:
 bootstrap -> scout -> survey -> plan -> explore -> prove -> review -> write -> done.
 The Stop hook is meant to call :func:`check_phase_exit` and refuse to end a
 phase whose criteria are unmet.
+
+Round 2 makes three promises real here:
+
+* **Budgets are read, not just stored.** :class:`Budgets` is typed; phase hours
+  are derived from ``phase_history`` and a phase that overran its budget cannot
+  exit without a ``## Budget overrun`` note in ``log.md`` naming the phase.
+* **Outcome classes are derived, not declared.** :func:`validate_outcome` checks
+  the class against the ledger and the novelty memo (1a/1b/1c/1d).
+* **Frozen files.** :func:`freeze` records sha256 of scorer/verifier/statement
+  files; the ``guard_frozen`` hook and :func:`frozen_changed` detect edits.
 """
 from __future__ import annotations
 
@@ -13,10 +24,11 @@ import hashlib
 import json
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from harness import CAMPAIGNS
 from harness.ledger.ledger import LedgerError, LedgerStore, atomic_write_json, pipeline_rank
@@ -34,26 +46,62 @@ PHASES: list[str] = [
     "done",
 ]
 
+OUTCOME_CLASSES = ("autonomous-new-result", "partial", "rediscovery", "literature-find", "negative")
 OutcomeClass = Literal["autonomous-new-result", "partial", "rediscovery", "literature-find", "negative"]
+
+# Files that are always treated as frozen once the statement is locked.
+ALWAYS_FROZEN = ("statement.md",)
 
 
 class CampaignError(Exception):
     """Raised for any invalid campaign operation (unknown slug, unknown phase, missing file, ...)."""
 
 
+class Budgets(BaseModel):
+    """Typed campaign budgets (``campaign.json["budgets"]``). Unknown keys are kept."""
+
+    model_config = ConfigDict(extra="allow")
+
+    hours_total: float | None = None
+    hours_per_phase: dict[str, float] = Field(default_factory=dict)
+    max_review_rounds: int = 3
+    curiosity_fraction: float = 0.3
+    noise_floor: float = 0.0
+    max_evolve_generations: int | None = None
+    # Round 2 — review regime (X1/Y1)
+    decoys_per_round: int = 2
+    lineup_min_recall: float = 0.8
+    lineup_control: bool = True
+    skeptic_passes: int = 2
+    max_skeptic_respawns: int = 2
+    # Round 2 — humans and calibration (X6/X2)
+    human_interrupts: int = 3
+    calibration_warn_brier: float = 0.25
+    # Round 2 — sketch tournament (Y6)
+    full_proofs: int = 2
+    sketch_personas: int = 3
+    elo_k: int = 32
+    pucb_c: float = 1.0
+    debate_top: int = 3
+
+
 class Campaign(BaseModel):
     """Top-level campaign record, persisted at ``campaigns/<slug>/campaign.json``."""
+
+    model_config = ConfigDict(validate_assignment=True)
 
     slug: str
     title: str
     created: str = Field(default_factory=utc_now_iso)
     phase: str = "bootstrap"
     phase_history: list[dict] = Field(default_factory=list)
-    budgets: dict = Field(default_factory=dict)
+    budgets: Budgets = Field(default_factory=Budgets)
     active_targets: list[str] = Field(default_factory=list)
     outcome_class: OutcomeClass | None = None
     statement_hash: str | None = None
     notes: str = ""
+    frozen: dict[str, str] = Field(default_factory=dict)
+    rubric_hashes: dict[str, str] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------- paths --
@@ -73,13 +121,33 @@ def _read_text(path: Path) -> str | None:
         return fh.read()
 
 
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 # ------------------------------------------------------------------- lifecycle --
 
-def create(slug: str, title: str, budgets: dict | None = None) -> Path:
-    """Create ``campaigns/<slug>/`` with its subdirs and skeleton files."""
+def create(slug: str, title: str, budgets: dict | None = None, *, allow_rejected: bool = False) -> Path:
+    """Create ``campaigns/<slug>/`` with its subdirs and skeleton files.
+
+    Refuses a title that fuzzily matches ``library/rejected.jsonl`` unless
+    ``allow_rejected`` (rule: consult cross-run memory before proposing topics).
+    """
     campaign_dir = _campaign_dir(slug)
     if campaign_dir.exists():
         raise CampaignError(f"campaign {slug!r} already exists at {campaign_dir}")
+    if not allow_rejected:
+        hit = _rejected_hit(title)
+        if hit is not None:
+            raise CampaignError(
+                f"title matches a rejected topic in library/rejected.jsonl: {hit.get('topic')!r} "
+                f"(reason: {hit.get('reason')!r}, campaign {hit.get('campaign')!r}); "
+                "pass --allow-rejected if the reason no longer applies"
+            )
 
     for sub in ("experiments", "proofs", "reviews", "paper", "cache"):
         (campaign_dir / sub).mkdir(parents=True, exist_ok=True)
@@ -91,7 +159,7 @@ def create(slug: str, title: str, budgets: dict | None = None) -> Path:
         created=now,
         phase="bootstrap",
         phase_history=[{"phase": "bootstrap", "entered": now, "exited": None}],
-        budgets=dict(budgets or {}),
+        budgets=Budgets.model_validate(dict(budgets or {})),
     )
     save(camp)
 
@@ -121,6 +189,15 @@ def create(slug: str, title: str, budgets: dict | None = None) -> Path:
     return campaign_dir
 
 
+def _rejected_hit(topic: str) -> dict | None:
+    try:
+        from harness.library import memory
+
+        return memory.is_rejected(topic)
+    except Exception:  # noqa: BLE001 - the library must never block campaign creation by crashing
+        return None
+
+
 def load(slug: str) -> Campaign:
     path = _campaign_json(slug)
     if not path.exists():
@@ -148,7 +225,8 @@ def set_phase(slug: str, phase: str) -> Campaign:
 
 
 def lock_statement(slug: str) -> Campaign:
-    """Freeze ``statement.md`` (the interpretation lock, CLAUDE.md) into ``statement_hash``."""
+    """Freeze ``statement.md`` (the interpretation lock, CLAUDE.md) into ``statement_hash``
+    and into the frozen-file table."""
     camp = load(slug)
     path = _campaign_dir(slug) / "statement.md"
     if not path.exists():
@@ -156,6 +234,9 @@ def lock_statement(slug: str) -> Campaign:
     with open(path, "r", encoding="utf-8") as fh:
         text = fh.read()
     camp.statement_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    frozen = dict(camp.frozen)
+    frozen["statement.md"] = _sha256(path)
+    camp.frozen = frozen
     save(camp)
     return camp
 
@@ -173,7 +254,227 @@ def statement_intact(slug: str) -> bool:
     return hashlib.sha256(text.encode("utf-8")).hexdigest() == camp.statement_hash
 
 
+# --------------------------------------------------------------- frozen files --
+
+def _rel(campaign_dir: Path, p: str) -> str:
+    """Campaign-relative, slash-separated form of a path given relative or absolute."""
+    path = Path(p)
+    if path.is_absolute():
+        try:
+            path = path.resolve().relative_to(campaign_dir.resolve())
+        except ValueError as exc:
+            raise CampaignError(f"{p} is not inside the campaign directory") from exc
+    return path.as_posix()
+
+
+def freeze(slug: str, paths: list[str]) -> Campaign:
+    """Record sha256 of each path (campaign-relative) so edits are detected."""
+    camp = load(slug)
+    campaign_dir = _campaign_dir(slug)
+    frozen = dict(camp.frozen)
+    for p in paths:
+        rel = _rel(campaign_dir, p)
+        full = campaign_dir / rel
+        if not full.is_file():
+            raise CampaignError(f"cannot freeze {rel!r}: file not found under {campaign_dir}")
+        frozen[rel] = _sha256(full)
+    camp.frozen = frozen
+    save(camp)
+    return camp
+
+
+def unfreeze(slug: str, paths: list[str]) -> Campaign:
+    camp = load(slug)
+    campaign_dir = _campaign_dir(slug)
+    frozen = dict(camp.frozen)
+    for p in paths:
+        rel = _rel(campaign_dir, p)
+        if rel in ALWAYS_FROZEN and camp.statement_hash is not None:
+            raise CampaignError(f"{rel} cannot be unfrozen while the statement is locked")
+        frozen.pop(rel, None)
+    camp.frozen = frozen
+    save(camp)
+    return camp
+
+
+def frozen_changed(slug: str) -> list[str]:
+    """Frozen files whose content no longer matches the recorded hash (or vanished)."""
+    camp = load(slug)
+    campaign_dir = _campaign_dir(slug)
+    changed: list[str] = []
+    for rel, digest in camp.frozen.items():
+        full = campaign_dir / rel
+        if not full.is_file():
+            changed.append(f"{rel} (missing)")
+        elif _sha256(full) != digest:
+            changed.append(rel)
+    return changed
+
+
+# ------------------------------------------------------------------- budgets --
+
+def _parse_ts(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def phase_hours(camp: Campaign, now: datetime | None = None) -> dict[str, float]:
+    """Hours spent per phase, summed over ``phase_history`` (open phase counted up to ``now``)."""
+    now = now or datetime.now(timezone.utc)
+    hours: dict[str, float] = {}
+    for entry in camp.phase_history:
+        start = _parse_ts(entry.get("entered"))
+        if start is None:
+            continue
+        end = _parse_ts(entry.get("exited")) or now
+        delta = max(0.0, (end - start).total_seconds() / 3600.0)
+        phase = str(entry.get("phase"))
+        hours[phase] = hours.get(phase, 0.0) + delta
+    return hours
+
+
+def budget_report(camp: Campaign, now: datetime | None = None) -> dict:
+    """``{"phases": {phase: {spent, budget, over}}, "total": {spent, budget, over}}``."""
+    spent = phase_hours(camp, now)
+    phases: dict[str, dict] = {}
+    for phase in sorted(set(spent) | set(camp.budgets.hours_per_phase)):
+        budget = camp.budgets.hours_per_phase.get(phase)
+        s = round(spent.get(phase, 0.0), 3)
+        phases[phase] = {"spent_hours": s, "budget_hours": budget, "over": budget is not None and s > budget}
+    total_spent = round(sum(spent.values()), 3)
+    total_budget = camp.budgets.hours_total
+    return {
+        "phases": phases,
+        "total": {
+            "spent_hours": total_spent,
+            "budget_hours": total_budget,
+            "over": total_budget is not None and total_spent > total_budget,
+        },
+    }
+
+
+def _overrun_noted(campaign_dir: Path, phase: str) -> bool:
+    log = _read_text(campaign_dir / "log.md") or ""
+    return re.search(rf"^##\s*Budget overrun\b[^\n]*\b{re.escape(phase)}\b", log, re.MULTILINE | re.IGNORECASE) is not None
+
+
+# ------------------------------------------------------------------- outcome --
+
+def _novelty_class(campaign_dir: Path) -> str | None:
+    from harness.review.verdict import novelty_class
+
+    return novelty_class(campaign_dir)
+
+
+def validate_outcome(slug: str, outcome: str | None) -> list[str]:
+    """Problems with declaring ``outcome`` for this campaign (empty list = consistent).
+
+    Rules (CLAUDE.md R4; erdosproblems wiki placement 1a–1d):
+
+    * ``autonomous-new-result``: a non-stale referee-passed/formalized claim **and**
+      a novelty memo classifying it ``1a`` or ``1b``.
+    * ``rediscovery``: a proof-drafted-or-better claim and a memo with ``1b``/``1c``.
+    * ``literature-find``: a memo with ``1c``/``1d`` or a ``known-in-literature`` claim.
+    * ``partial``: some claim at ``numerically-supported`` or above (pipeline).
+    * ``negative``: a refuted target, or nothing at ``proof-drafted`` or above.
+    * A memo saying ``1c`` forbids ``autonomous-new-result``/``partial``; ``1d`` forbids
+      ``autonomous-new-result``/``rediscovery``.
+    """
+    problems: list[str] = []
+    if outcome is None:
+        return ["outcome_class is not set"]
+    if outcome not in OUTCOME_CLASSES:
+        return [f"unknown outcome class {outcome!r}; expected one of {OUTCOME_CLASSES}"]
+    campaign_dir = _campaign_dir(slug)
+    store = LedgerStore(campaign_dir / "ledger.json", campaign=slug)
+    claims = list(store.ledger.claims.values())
+    cls = _novelty_class(campaign_dir)
+
+    assertable = [c for c in claims if c.status in ("referee-passed", "formalized") and not c.stale]
+    drafted_rank = pipeline_rank("proof-drafted")
+    numeric_rank = pipeline_rank("numerically-supported")
+    drafted = [c for c in claims if (pipeline_rank(c.status) or -1) >= drafted_rank]
+    numeric = [c for c in claims if (pipeline_rank(c.status) or -1) >= numeric_rank]
+    refuted = [c for c in claims if c.status == "refuted"]
+    known = [c for c in claims if c.status == "known-in-literature"]
+
+    if outcome == "autonomous-new-result":
+        if not assertable:
+            problems.append("autonomous-new-result requires a referee-passed (or formalized), non-stale claim")
+        if cls is None:
+            problems.append("autonomous-new-result requires a novelty memo (reviews/roundN/novelty.md) with class 1a or 1b")
+        elif cls not in ("1a", "1b"):
+            problems.append(f"novelty memo classifies the result as {cls}; autonomous-new-result needs 1a or 1b")
+    elif outcome == "rediscovery":
+        if not drafted:
+            problems.append("rediscovery requires a claim at proof-drafted or above (we proved something)")
+        if cls is None:
+            problems.append("rediscovery requires a novelty memo with class 1b or 1c")
+        elif cls not in ("1b", "1c"):
+            problems.append(f"novelty memo class is {cls}; rediscovery needs 1b or 1c")
+    elif outcome == "literature-find":
+        if cls not in ("1c", "1d") and not known:
+            problems.append("literature-find requires a novelty memo with class 1c/1d or a known-in-literature claim")
+    elif outcome == "partial":
+        if not numeric:
+            problems.append("partial requires a claim at numerically-supported or above")
+        if cls == "1c":
+            problems.append("novelty memo class 1c (already known) is inconsistent with partial; use rediscovery/literature-find")
+    elif outcome == "negative":
+        if not refuted and drafted:
+            problems.append("negative requires a refuted target or no claim at proof-drafted or above")
+    if cls == "1d" and outcome in ("autonomous-new-result", "rediscovery"):
+        problems.append("novelty memo class 1d (statement misread) forbids autonomous-new-result/rediscovery")
+    return problems
+
+
+def set_outcome(slug: str, outcome: str) -> Campaign:
+    problems = validate_outcome(slug, outcome)
+    if problems:
+        raise CampaignError(f"cannot set outcome {outcome!r}: " + "; ".join(problems))
+    camp = load(slug)
+    camp.outcome_class = outcome  # type: ignore[assignment]
+    save(camp)
+    return camp
+
+
+# ------------------------------------------------------------- portfolio --
+
+def selected_target_statement(campaign_dir: Path) -> str | None:
+    """``- Statement (informal): …`` under ``## Selected target`` in portfolio.md."""
+    text = _read_text(campaign_dir / "portfolio.md")
+    if not text:
+        return None
+    m = re.search(r"^##\s*Selected target(.*?)(?=^##\s|\Z)", text, re.DOTALL | re.MULTILINE)
+    section = m.group(1) if m else text
+    s = re.search(r"^-\s*Statement(?:\s*\(informal\))?:\s*(.+)$", section, re.MULTILINE)
+    return s.group(1).strip() if s else None
+
+
 # --------------------------------------------------------------- phase exit --
+
+def _statement_tests_passed(campaign_dir: Path) -> tuple[bool, str]:
+    results = _read_text(campaign_dir / "experiments" / "results.json")
+    if results is None:
+        return False, "experiments/results.json does not exist"
+    try:
+        data = json.loads(results)
+    except json.JSONDecodeError as exc:
+        return False, f"experiments/results.json is not valid JSON: {exc}"
+    entry = data.get("statement_tests") if isinstance(data, dict) else None
+    if not isinstance(entry, dict):
+        return False, "experiments/results.json has no 'statement_tests' entry"
+    if entry.get("passed") is not True:
+        return False, "experiments/results.json['statement_tests'].passed is not true"
+    return True, ""
+
 
 def check_phase_exit(slug: str) -> list[str]:
     """Return the list of UNMET criteria for leaving the campaign's *current* phase.
@@ -188,6 +489,23 @@ def check_phase_exit(slug: str) -> list[str]:
     def _ledger() -> LedgerStore:
         return LedgerStore(campaign_dir / "ledger.json", campaign=slug)
 
+    # -- every phase: budget accounting and frozen files
+    report = budget_report(camp)
+    info = report["phases"].get(phase)
+    if info and info["over"] and not _overrun_noted(campaign_dir, phase):
+        unmet.append(
+            f"phase '{phase}' spent {info['spent_hours']} h of its {info['budget_hours']} h budget; add a "
+            f"'## Budget overrun ({phase})' note to log.md explaining why before exiting"
+        )
+    if report["total"]["over"] and not _overrun_noted(campaign_dir, "total"):
+        unmet.append(
+            f"campaign spent {report['total']['spent_hours']} h of hours_total={report['total']['budget_hours']}; "
+            "add a '## Budget overrun (total)' note to log.md"
+        )
+    changed = frozen_changed(slug)
+    if changed:
+        unmet.append(f"frozen files changed since they were frozen: {changed} (re-open the phase or unfreeze deliberately)")
+
     if phase == "bootstrap":
         pass  # no exit criteria specified for bootstrap
 
@@ -197,6 +515,15 @@ def check_phase_exit(slug: str) -> list[str]:
             unmet.append("portfolio.md does not exist")
         elif len(text) <= 800:
             unmet.append(f"portfolio.md is only {len(text)} chars (need > 800)")
+        else:
+            stmt = selected_target_statement(campaign_dir)
+            if stmt and "Rejected-override:" not in text:
+                hit = _rejected_hit(stmt)
+                if hit is not None:
+                    unmet.append(
+                        f"selected target matches a rejected topic in library/rejected.jsonl ({hit.get('topic')!r}, "
+                        f"reason {hit.get('reason')!r}); add a 'Rejected-override: <why the reason no longer applies>' line"
+                    )
 
     elif phase == "survey":
         text = _read_text(campaign_dir / "survey.md")
@@ -253,8 +580,14 @@ def check_phase_exit(slug: str) -> list[str]:
         if not has_target:
             unmet.append("ledger has no target/conjecture claim with status >= conjectured")
 
-        if not camp.budgets:
-            unmet.append("budgets is empty")
+        if camp.budgets.hours_total is None:
+            unmet.append("budgets.hours_total is not set (the strategist must set budgets)")
+
+        if not (campaign_dir / "experiments" / "statement_tests.py").exists():
+            unmet.append("experiments/statement_tests.py does not exist (definition unit tests of the interpretation lock)")
+        ok, why = _statement_tests_passed(campaign_dir)
+        if not ok:
+            unmet.append(f"statement tests not recorded as passed: {why}")
 
     elif phase == "explore":
         store = _ledger()
@@ -296,10 +629,12 @@ def check_phase_exit(slug: str) -> list[str]:
             unmet.append("no referee evidence recorded (no review round found)")
         else:
             n = max(rounds)
+            if n > camp.budgets.max_review_rounds:
+                unmet.append(f"round {n} exceeds budgets.max_review_rounds={camp.budgets.max_review_rounds}")
             round_dir = campaign_dir / "reviews" / f"round{n}"
-            for fname in ("skeptic.md", "falsifier.md", "novelty.md", "judge.md"):
-                if not (round_dir / fname).exists():
-                    unmet.append(f"reviews/round{n}/{fname} does not exist")
+            for fname in ("skeptic", "falsifier", "novelty", "judge"):
+                if not list(round_dir.glob(f"{fname}*.md")):
+                    unmet.append(f"reviews/round{n}/{fname}.md does not exist")
             has_pass = any(c.status == "referee-passed" for c in store.ledger.claims.values())
             judge_text = _read_text(round_dir / "judge.md") or ""
             pivot = "VERDICT: PIVOT" in judge_text
@@ -308,6 +643,14 @@ def check_phase_exit(slug: str) -> list[str]:
                     f"round {n}: no claim is referee-passed, and reviews/round{n}/judge.md "
                     "does not contain the line 'VERDICT: PIVOT'"
                 )
+            if n == camp.budgets.max_review_rounds and not has_pass and not pivot:
+                unmet.append(f"round {n} is the last budgeted round: the judge must PIVOT or downgrade")
+            try:
+                from harness.review.barrier import check_round  # Round-1 Step 4
+            except ImportError:
+                check_round = None  # type: ignore[assignment]
+            if check_round is not None:
+                unmet.extend(check_round(campaign_dir, n, store))
 
     elif phase == "write":
         if not (campaign_dir / "paper" / "main.tex").exists():
@@ -326,10 +669,15 @@ def check_phase_exit(slug: str) -> list[str]:
             else:
                 if data.get("ok") is not True:
                     unmet.append("paper/check.json does not report \"ok\": true")
+        store = _ledger()
+        if store.assertable() and _novelty_class(campaign_dir) is None:
+            unmet.append("assertable claims exist but no novelty memo (reviews/roundN/novelty.md) classifies them")
 
     elif phase == "done":
         if camp.outcome_class is None:
             unmet.append("outcome_class is not set")
+        else:
+            unmet.extend(validate_outcome(slug, camp.outcome_class))
         log_text = _read_text(campaign_dir / "log.md") or ""
         if "## Outcome" not in log_text:
             unmet.append("log.md does not contain a '## Outcome' section")
@@ -368,6 +716,26 @@ def status_report(slug: str) -> str:
         lines.extend(f"- [ ] {m}" for m in unmet)
     else:
         lines.append(f"All exit criteria for phase '{camp.phase}' are met.")
+
+    report = budget_report(camp)
+    lines += ["", "## Budgets", ""]
+    tot = report["total"]
+    lines.append(
+        f"- total: {tot['spent_hours']} h spent / {tot['budget_hours'] if tot['budget_hours'] is not None else 'unset'} h"
+        + (" **OVER**" if tot["over"] else "")
+    )
+    for phase, info in report["phases"].items():
+        b = info["budget_hours"]
+        lines.append(f"- {phase}: {info['spent_hours']} h / {b if b is not None else 'unset'} h" + (" **OVER**" if info["over"] else ""))
+    lines.append(f"- max_review_rounds: {camp.budgets.max_review_rounds}; curiosity_fraction: {camp.budgets.curiosity_fraction}")
+
+    changed = set(frozen_changed(slug))
+    if camp.frozen:
+        lines += ["", "## Frozen files", ""]
+        for rel in sorted(camp.frozen):
+            flag = "MODIFIED" if rel in changed or f"{rel} (missing)" in changed else "ok"
+            lines.append(f"- {rel}: {flag}")
+
     lines += [
         "",
         "## Ledger summary",
@@ -394,6 +762,8 @@ def main(argv: list[str] | None = None) -> int:
     p_create = sub.add_parser("create")
     p_create.add_argument("slug")
     p_create.add_argument("--title", required=True)
+    p_create.add_argument("--hours-total", type=float, default=None)
+    p_create.add_argument("--allow-rejected", action="store_true", help="create even if the title matches a rejected topic")
 
     p_phase = sub.add_parser("phase")
     p_phase.add_argument("slug")
@@ -408,6 +778,23 @@ def main(argv: list[str] | None = None) -> int:
     p_status = sub.add_parser("status")
     p_status.add_argument("slug")
 
+    p_budget = sub.add_parser("budget", help="print the budget report (hours per phase vs budgets)")
+    p_budget.add_argument("slug")
+    p_budget.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                          help="set a budget field, e.g. --set hours_total=40 --set hours_per_phase.explore=8")
+
+    p_outcome = sub.add_parser("outcome", help="set the outcome class (validated against the ledger and novelty memo)")
+    p_outcome.add_argument("slug")
+    p_outcome.add_argument("outcome", choices=list(OUTCOME_CLASSES))
+
+    p_freeze = sub.add_parser("freeze", help="record hashes of files that must not change during explore/prove/review")
+    p_freeze.add_argument("slug")
+    p_freeze.add_argument("paths", nargs="+")
+
+    p_unfreeze = sub.add_parser("unfreeze")
+    p_unfreeze.add_argument("slug")
+    p_unfreeze.add_argument("paths", nargs="+")
+
     sub.add_parser("list")
     sub.add_parser("active")
 
@@ -418,7 +805,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.cmd == "create":
-            path = create(args.slug, args.title)
+            budgets = {"hours_total": args.hours_total} if args.hours_total is not None else None
+            path = create(args.slug, args.title, budgets, allow_rejected=args.allow_rejected)
             print(f"created campaign at {path}")
             return 0
 
@@ -446,6 +834,42 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.cmd == "status":
             print(status_report(args.slug))
+            return 0
+
+        if args.cmd == "budget":
+            camp = load(args.slug)
+            if args.set:
+                data = camp.budgets.model_dump()
+                for item in args.set:
+                    if "=" not in item:
+                        raise CampaignError(f"--set expects KEY=VALUE, got {item!r}")
+                    key, raw = item.split("=", 1)
+                    try:
+                        value = json.loads(raw)
+                    except json.JSONDecodeError:
+                        value = raw
+                    if key.startswith("hours_per_phase."):
+                        data.setdefault("hours_per_phase", {})[key.split(".", 1)[1]] = float(value)
+                    else:
+                        data[key] = value
+                camp.budgets = Budgets.model_validate(data)
+                save(camp)
+            print(json.dumps({"budgets": camp.budgets.model_dump(), **budget_report(camp)}, indent=2, sort_keys=True))
+            return 0
+
+        if args.cmd == "outcome":
+            camp = set_outcome(args.slug, args.outcome)
+            print(f"{args.slug}: outcome_class -> {camp.outcome_class}")
+            return 0
+
+        if args.cmd == "freeze":
+            camp = freeze(args.slug, args.paths)
+            print(json.dumps(camp.frozen, indent=2, sort_keys=True))
+            return 0
+
+        if args.cmd == "unfreeze":
+            camp = unfreeze(args.slug, args.paths)
+            print(json.dumps(camp.frozen, indent=2, sort_keys=True))
             return 0
 
         if args.cmd == "list":

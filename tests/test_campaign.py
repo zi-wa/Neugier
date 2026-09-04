@@ -175,8 +175,10 @@ def test_check_phase_exit_plan():
     _write(path / "ideas.md", _routes(5))
     _write(path / "questions.md", _questions(3))
 
+    _write(path / "experiments" / "statement_tests.py", "def test_def(): assert True")
+    _write(path / "experiments" / "results.json", json.dumps({"statement_tests": {"passed": True, "n": 1}}))
     c = campaign.load("demo")
-    c.budgets = {"max_review_rounds": 3}
+    c.budgets = {"max_review_rounds": 3, "hours_total": 40}
     campaign.save(c)
 
     store = LedgerStore(path / "ledger.json", campaign="demo")
@@ -193,8 +195,10 @@ def test_check_phase_exit_plan_statement_tampered_after_lock():
     _write(path / "plan.md", "x" * 1600)
     _write(path / "ideas.md", _routes(5))
     _write(path / "questions.md", _questions(3))
+    _write(path / "experiments" / "statement_tests.py", "def test_def(): assert True")
+    _write(path / "experiments" / "results.json", json.dumps({"statement_tests": {"passed": True, "n": 1}}))
     c = campaign.load("demo")
-    c.budgets = {"max_review_rounds": 3}
+    c.budgets = {"max_review_rounds": 3, "hours_total": 40}
     campaign.save(c)
     store = LedgerStore(path / "ledger.json", campaign="demo")
     store.add(kind="target", statement="Target G.", status="conjectured")
@@ -213,8 +217,10 @@ def test_check_phase_exit_plan_needs_five_routes():
     _write(path / "plan.md", "x" * 1600)
     _write(path / "ideas.md", _routes(4))
     _write(path / "questions.md", _questions(3))
+    _write(path / "experiments" / "statement_tests.py", "def test_def(): assert True")
+    _write(path / "experiments" / "results.json", json.dumps({"statement_tests": {"passed": True, "n": 1}}))
     c = campaign.load("demo")
-    c.budgets = {"max_review_rounds": 3}
+    c.budgets = {"max_review_rounds": 3, "hours_total": 40}
     campaign.save(c)
     store = LedgerStore(path / "ledger.json", campaign="demo")
     store.add(kind="target", statement="Target G.", status="conjectured")
@@ -330,10 +336,10 @@ def test_check_phase_exit_done():
     assert unmet
 
     c = campaign.load("demo")
-    c.outcome_class = "partial"
+    c.outcome_class = "negative"  # consistent with an empty ledger (outcome classes are validated)
     campaign.save(c)
     with open(path / "log.md", "a", encoding="utf-8") as fh:
-        fh.write("\n## Outcome\n\nPartial result.\n")
+        fh.write("\n## Outcome\n\nNegative result.\n")
 
     assert campaign.check_phase_exit("demo") == []
 
