@@ -38,6 +38,8 @@ _STORE_FILES = {
     "questions": "questions.jsonl",
     "calibration": "calibration.jsonl",
     "lemmas": "lemmas.jsonl",
+    "lessons": "lessons.jsonl",
+    "moves": "moves.jsonl",
 }
 
 

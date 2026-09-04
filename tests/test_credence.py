@@ -138,7 +138,7 @@ def test_plan_gate_requires_credences_and_finish_appends_calibration():
     report = campaign.status_report("demo")
     assert "## Calibration" in report
     with open(path / "log.md", "a", encoding="utf-8") as fh:
-        fh.write("\n## Outcome\nnegative\n")
+        fh.write("\n## Outcome\nnegative\n" + "\n## Lessons\n- [phase=explore] greedy plateau was real — evidence: questions.md — moves: M61 — tags: evolve\n")
     summary = campaign.finish("demo", outcome="negative")
     assert summary["calibration_rows"] >= 1 and (path / "calibration.json").exists()
     assert memory.all("calibration")

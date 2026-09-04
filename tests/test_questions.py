@@ -186,7 +186,7 @@ def test_library_open_questions_and_finish(tmp_path):
     path = campaign.create("demo", "Demo")
     _write(path / "questions.md", DOC)
     with open(path / "log.md", "a", encoding="utf-8") as fh:
-        fh.write("\n## Outcome\nnegative\n")
+        fh.write("\n## Outcome\nnegative\n" + "\n## Lessons\n- [phase=explore] greedy plateau was real — evidence: questions.md — moves: M61 — tags: evolve\n")
     summary = campaign.finish("demo", outcome="negative")
     assert summary["open_questions_recorded"] == 2 and campaign.load("demo").phase == "done"
     assert campaign.finish("demo") ["open_questions_recorded"] == 0  # deduped

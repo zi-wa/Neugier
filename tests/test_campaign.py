@@ -370,7 +370,7 @@ def test_check_phase_exit_done():
     c.outcome_class = "negative"  # consistent with an empty ledger (outcome classes are validated)
     campaign.save(c)
     with open(path / "log.md", "a", encoding="utf-8") as fh:
-        fh.write("\n## Outcome\n\nNegative result.\n")
+        fh.write("\n## Outcome\n\nNegative result.\n" + "\n## Lessons\n- [phase=explore] greedy plateau was real — evidence: questions.md — moves: M61 — tags: evolve\n")
 
     assert campaign.check_phase_exit("demo") == []
 

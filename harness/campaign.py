@@ -192,8 +192,78 @@ def create(slug: str, title: str, budgets: dict | None = None, *, allow_rejected
 
     with open(campaign_dir / HUMAN_FILE, "w", encoding="utf-8") as fh:
         fh.write(HUMAN_TEMPLATE)
+    _record_policy_hash(slug)
 
     return campaign_dir
+
+
+def _policy_section(text: str) -> str:
+    m = re.search(r"^##\s*Policy\s*$(.*?)(?=^##\s|\Z)", text or "", re.MULTILINE | re.DOTALL)
+    return (m.group(1) if m else "").strip()
+
+
+def _record_policy_hash(slug: str) -> None:
+    """Remember the sha256 of HUMAN.md's '## Policy' section (only the human may change it)."""
+    campaign_dir = _campaign_dir(slug)
+    human = campaign_dir / "HUMAN.md"
+    if not human.exists():
+        return
+    digest = hashlib.sha256(_policy_section(human.read_text(encoding="utf-8", errors="replace")).encode("utf-8")).hexdigest()
+    marker = campaign_dir / ".human_policy.sha256"
+    marker.write_text(digest, encoding="utf-8")
+
+
+def human_policy_state(slug: str) -> str:
+    """``ok`` | ``MODIFIED`` | ``missing`` — whether HUMAN.md's policy changed since it was last acknowledged."""
+    campaign_dir = _campaign_dir(slug)
+    human = campaign_dir / "HUMAN.md"
+    marker = campaign_dir / ".human_policy.sha256"
+    if not human.exists():
+        return "missing"
+    if not marker.exists():
+        return "MODIFIED"
+    digest = hashlib.sha256(_policy_section(human.read_text(encoding="utf-8", errors="replace")).encode("utf-8")).hexdigest()
+    return "ok" if digest == marker.read_text(encoding="utf-8").strip() else "MODIFIED"
+
+
+def structural_advisories(slug: str) -> list[str]:
+    """Performative-compliance checks (Round-2 Y14): what the log claims vs what the ledger/results show."""
+    campaign_dir = _campaign_dir(slug)
+    out: list[str] = []
+    store = LedgerStore(campaign_dir / "ledger.json", campaign=slug)
+    drafted_rank = pipeline_rank("proof-drafted")
+    for c in store.ledger.claims.values():
+        if c.kind in ("lemma", "proposition") and (pipeline_rank(c.status) or -1) >= drafted_rank:
+            if not any(ev.type == "falsification" and ev.path and (campaign_dir / ev.path).exists() for ev in c.evidence):
+                out.append(f"{c.id} is {c.status} but no falsification evidence is attached (proof-standards §7.3: run the falsifier on every lemma)")
+    results = {}
+    try:
+        results = json.loads((campaign_dir / "experiments" / "results.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
+    try:
+        from harness.review.verdict import blocks_for_role, round_dirs
+
+        for n, rdir in round_dirs(campaign_dir):
+            for role in ("skeptic", "falsifier", "replicator"):
+                for block in blocks_for_role(rdir, role):
+                    for item in block.get("checked") or []:
+                        for key in re.findall(r"results\.json#([A-Za-z0-9_.\-]+)", str(item)):
+                            if isinstance(results, dict) and key not in results:
+                                out.append(f"round {n} {role} claims to have checked results.json#{key}, which does not exist")
+    except Exception:  # noqa: BLE001
+        pass
+    log = _read_text(campaign_dir / "log.md") or ""
+    promises = re.findall(r"\b(ran the falsifier on every lemma|verified numerically|checked all lemmas|all lemmas (?:were )?falsified|reproduced every number)\b",
+                          log, re.IGNORECASE)
+    if promises:
+        lemmas = [c for c in store.ledger.claims.values() if c.kind == "lemma"]
+        without = [c.id for c in lemmas if not any(ev.type == "falsification" for ev in c.evidence)]
+        if without:
+            out.append(f"log.md says '{promises[0]}' but lemmas without falsification evidence exist: {without}")
+    if human_policy_state(slug) == "MODIFIED":
+        out.append("HUMAN.md policy changed since it was last read: re-read it before continuing (`harness campaign ack-human`)")
+    return out
 
 
 def _rejected_hit(topic: str) -> dict | None:
@@ -513,6 +583,17 @@ def finish(slug: str, outcome: str | None = None) -> dict:
     log_text = _read_text(campaign_dir / "log.md") or ""
     if "## Outcome" not in log_text:
         raise CampaignError("cannot finish: log.md has no '## Outcome' section (what was proven, what was not, dead routes, time spent)")
+    from harness.ideas import load_routes
+    from harness.library.lessons import add_lessons, add_route_moves, parse_lessons
+
+    lessons = parse_lessons(log_text)
+    if not lessons:
+        raise CampaignError(
+            "cannot finish: log.md has no '## Lessons' bullets (format: '- [phase=review] <lesson> — evidence: <path> — "
+            "moves: M12,M21 — tags: skeptic,gap'); the judge and strategist write them before finishing"
+        )
+    lessons_added = add_lessons(slug, lessons)
+    moves_added = add_route_moves(slug, load_routes(campaign_dir))
     store = LedgerStore(campaign_dir / "ledger.json", campaign=slug)
     claims = [{"id": c.id, "statement": c.statement, "status": c.status, "kind": c.kind} for c in store.assertable()]
     paper = campaign_dir / "paper" / "main.pdf"
@@ -533,7 +614,8 @@ def finish(slug: str, outcome: str | None = None) -> dict:
         except OSError:
             pass
     return {"slug": slug, "outcome_class": camp.outcome_class, "claims": len(claims), "open_questions_recorded": added,
-            "calibration_rows": cal_rows, "calibration_n": cal.n}
+            "calibration_rows": cal_rows, "calibration_n": cal.n, "lessons_recorded": lessons_added,
+            "route_moves_recorded": moves_added}
 
 
 # ------------------------------------------------------------- portfolio --
@@ -867,6 +949,10 @@ def check_phase_exit(slug: str) -> list[str]:
         log_text = _read_text(campaign_dir / "log.md") or ""
         if "## Outcome" not in log_text:
             unmet.append("log.md does not contain a '## Outcome' section")
+        from harness.library.lessons import parse_lessons
+
+        if not parse_lessons(log_text):
+            unmet.append("log.md has no '## Lessons' bullets (which referee caught what, which moves produced the key step, why routes died)")
 
     else:  # pragma: no cover - PHASES/set_phase already guard this
         unmet.append(f"unknown phase: {phase!r}")
@@ -943,7 +1029,9 @@ def status_report(slug: str) -> str:
     hs = human_summary(cdir, camp.budgets.model_dump())
     lines += ["", "## Human", "",
               f"- escalations: {hs['used']}/{hs['limit']} used; open: {', '.join(hs['open']) or 'none'}; "
-              f"HUMAN.md updated: {hs['human_md_updated'] or 'never'}"]
+              f"HUMAN.md updated: {hs['human_md_updated'] or 'never'}; policy: {human_policy_state(slug)}"]
+    for a in structural_advisories(slug):
+        lines.append(f"- advisory: {a}")
 
     from harness.ledger.calibration import compute as compute_calibration
 
@@ -1021,6 +1109,9 @@ def main(argv: list[str] | None = None) -> int:
     p_stakes = sub.add_parser("suggest-stakes", help="suggest a stakes tier for the selected target from portfolio.md (never writes)")
     p_stakes.add_argument("slug")
 
+    p_ack = sub.add_parser("ack-human", help="acknowledge the current HUMAN.md policy (records its hash after reading it)")
+    p_ack.add_argument("slug")
+
     p_targets = sub.add_parser("targets", help="show or set the active target claim ids")
     p_targets.add_argument("slug")
     p_targets.add_argument("--set", default=None, help="comma-separated claim ids")
@@ -1065,7 +1156,7 @@ def main(argv: list[str] | None = None) -> int:
             from harness.ideas import advisories as route_advisories
             from harness.questions import advisories
 
-            for a in advisories(_campaign_dir(args.slug)) + route_advisories(_campaign_dir(args.slug)):
+            for a in advisories(_campaign_dir(args.slug)) + route_advisories(_campaign_dir(args.slug)) + structural_advisories(args.slug):
                 print(f"advisory: {a}", file=sys.stderr)
             if unmet:
                 for m in unmet:
@@ -1122,6 +1213,11 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.cmd == "suggest-stakes":
             print(json.dumps(suggest_stakes(args.slug), indent=2, sort_keys=True, ensure_ascii=False))
+            return 0
+
+        if args.cmd == "ack-human":
+            _record_policy_hash(args.slug)
+            print(f"HUMAN.md policy acknowledged ({human_policy_state(args.slug)})")
             return 0
 
         if args.cmd == "targets":
