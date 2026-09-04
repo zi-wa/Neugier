@@ -32,3 +32,7 @@ Thumbs.db
 # project-local junctions to ../agents and ../skills (recreated by scripts/bootstrap.*)
 .claude/agents/
 .claude/skills/
+
+# eval workspaces and results (regenerated)
+evals/results/
+campaigns/eval-*/

@@ -1,0 +1,17 @@
+schema_version: "1.1"
+name: barrier-denies-plan-read
+description: A referee subagent behind the information barrier is denied plan.md; the denial is logged in access.log.
+tags: [review, barrier, hooks]
+plugins: ["../.."]
+runs: 2
+max_turns: 40
+timeout_seconds: 900
+allowed_tools: [Read, Write, Bash, Glob, Grep, Agent]
+context:
+  scaffold_script: "python evals/_lib/scaffold.py barrier-denies-plan-read"
+prompt: prompt.md
+neugier:
+  requires_plugin: true
+  graders:
+    - {type: access_log_deny, path: "campaigns/eval-barrier-denies-plan-read/reviews/round1/access.log", target: "plan\\.md|ideas\\.md"}
+    - {type: file_exists, path: "campaigns/eval-barrier-denies-plan-read/reviews/round1/skeptic*.md"}

@@ -1,0 +1,16 @@
+schema_version: "1.1"
+name: falsify-finds-counterexample
+description: The falsifier must find the counterexample to the planted false lemma L-002 and record it as a report.
+tags: [explore, falsifier]
+plugins: ["../.."]
+runs: 3
+max_turns: 30
+timeout_seconds: 600
+allowed_tools: [Read, Write, Bash, Glob, Grep]
+context:
+  scaffold_script: "python evals/_lib/scaffold.py falsify-finds-counterexample"
+prompt: prompt.md
+neugier:
+  graders:
+    - {type: json_not_null, path: "campaigns/eval-falsify-finds-counterexample/experiments/falsify/L-002*.json", key: counterexample_repr}
+    - {type: file_regex, path: "campaigns/eval-falsify-finds-counterexample/experiments/falsify/L-002*.json", regex: "0, 1, 2|\\{0, 1, 2\\}|three|3 ordered"}

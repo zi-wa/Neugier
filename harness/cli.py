@@ -20,6 +20,7 @@ COMMANDS = {
     "prove": ("harness.prove.cli", "sketch tournament: Elo ratings and full-proof selection"),
     "doctor": ("harness.doctor", "environment and wiring checks (venv, tectonic, hooks, links, engines)"),
     "headless": ("harness.headless", "drive a campaign with repeated `claude -p` iterations"),
+    "evals": ("harness.evals", "run the plugin eval cases with `claude -p` (with/without arms)"),
 }
 
 

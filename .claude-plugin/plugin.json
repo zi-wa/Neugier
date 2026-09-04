@@ -2,10 +2,11 @@
   "name": "neugier",
   "displayName": "Neugier - Mathematical Research Harness",
   "version": "0.2.0",
-  "description": "Autonomous paper-grade mathematical research: goldmine topic scouting, excerpt-anchored literature survey, interpretation-locked planning, falsification-first experiments with exact verifiers, proof development, adversarial review behind an information barrier, and a ledger-constrained LaTeX paper.",
+  "description": "Autonomous paper-grade mathematical research: goldmine topic scouting, excerpt-anchored literature survey, interpretation-locked planning, falsification-first experiments with exact verifiers, sketch-first proof development, adversarial review behind an enforced information barrier (decoy lineups, k-of-k skeptics, blinded replication), calibrated curiosity, and a ledger-constrained LaTeX paper with provenance and disclosure appendices.",
   "author": { "name": "Neugier contributors" },
   "license": "MIT",
   "skills": "./skills",
   "agents": "./agents",
-  "hooks": "./hooks/hooks.json"
+  "hooks": "./hooks/hooks.json",
+  "experimental": { "evals": "./evals" }
 }

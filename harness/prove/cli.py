@@ -19,6 +19,10 @@ def build_parser() -> argparse.ArgumentParser:
     e.add_argument("--c", type=float, default=1.0)
     e.add_argument("--full-proofs", type=int, default=None, dest="full_proofs")
     e.add_argument("--json", action="store_true")
+    c = sub.add_parser("collect", help="check proof files out of worktree commits and replay their ledger-ops")
+    c.add_argument("--campaign", required=True)
+    c.add_argument("--claim", required=True)
+    c.add_argument("--commits", required=True, help="comma-separated commit shas")
     return p
 
 
@@ -40,6 +44,17 @@ def main(argv: list[str] | None = None) -> int:
             print("no sketch selectable (all falsified or no sketches)", file=sys.stderr)
             return 3
         return 0
+    if args.cmd == "collect":
+        import harness
+        from harness.prove.collect import collect
+
+        try:
+            report = collect(harness.ROOT, args.campaign, args.claim, [c.strip() for c in args.commits.split(",") if c.strip()])
+        except RuntimeError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 1 if any(o.get("error") for c in report["commits"].values() for o in c["ledger_ops"]) else 0
     return 2
 
 

@@ -1,0 +1,18 @@
+schema_version: "1.1"
+name: review-planted-circular
+description: The skeptic must fail the planted proof and name the circular (step 3) and false (step 4) lemma steps.
+tags: [review, skeptic, adversarial]
+plugins: ["../.."]
+runs: 3
+max_turns: 40
+timeout_seconds: 900
+allowed_tools: [Read, Write, Glob, Grep, Bash]
+context:
+  scaffold_script: "python evals/_lib/scaffold.py review-planted-circular"
+prompt: prompt.md
+# In-house runner metadata (harness evals run): deterministic graders and the harness command hints.
+neugier:
+  graders:
+    - {type: file_regex, path: "campaigns/eval-review-planted-circular/reviews/round1/skeptic*.md", regex: "verdict:\\s*fail"}
+    - {type: file_regex, path: "campaigns/eval-review-planted-circular/reviews/round1/skeptic*.md", regex: "step:\\s*(3|4)\\b"}
+    - {type: file_regex, path: "campaigns/eval-review-planted-circular/reviews/round1/skeptic*.md", regex: "circular|invokes the theorem|T-001", with_only: false}
