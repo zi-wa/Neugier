@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 import harness.campaign as campaign
+from harness.review import barrier as B
 from harness.ledger.ledger import LedgerStore
 from harness.ledger.schema import Evidence
 
@@ -31,6 +32,17 @@ def _routes(n: int = 5) -> str:
 
 def _questions(n: int) -> str:
     return "\n".join(f"## Q-{i:03d}: why {i}?\n- Curiosity: 2/3\n- Status: open" for i in range(1, n + 1))
+
+
+def _log_activity(round_dir: Path, roles=("skeptic", "falsifier", "novelty")) -> None:
+    round_dir.mkdir(parents=True, exist_ok=True)
+    with open(round_dir / "access.log", "a", encoding="utf-8") as fh:
+        for role in roles:
+            fh.write(json.dumps({"ts": "2020-01-01T00:00:00", "role": role, "tool": "Read",
+                                 "decision": "allow", "target": "statement.md"}) + "\n")
+
+
+NOVELTY_OK = "memo\n```yaml\nrole: novelty\nclaim: T-001\nround: 1\nverdict: pass\nclass: 1a\n```\n"
 
 
 # ------------------------------------------------------------------- create --
@@ -284,8 +296,12 @@ def test_check_phase_exit_review_full_pass():
     assert any("round1" in m for m in unmet)  # review files missing
 
     round_dir = path / "reviews" / "round1"
-    for fname in ("skeptic.md", "falsifier.md", "novelty.md", "judge.md"):
+    B.open_round(path, 1, claim.id, ["proofs/thm.tex"], skeptics=1, stakes=0)
+    for fname in ("skeptic.md", "falsifier.md"):
         _write(round_dir / fname, "notes")
+    _write(round_dir / "novelty.md", NOVELTY_OK)
+    _write(round_dir / "judge.md", "notes\nVERDICT: PASS\n")
+    _log_activity(round_dir)
 
     # files present, but no claim referee-passed yet and judge.md has no PIVOT
     unmet = campaign.check_phase_exit("demo")
@@ -306,9 +322,13 @@ def test_check_phase_exit_review_pivot_path():
     )
 
     round_dir = path / "reviews" / "round1"
-    for fname in ("skeptic.md", "falsifier.md", "novelty.md"):
+    _write(path / "proofs" / "thm.tex", "proof")
+    B.open_round(path, 1, claim.id, ["proofs/thm.tex"], skeptics=1, stakes=0)
+    for fname in ("skeptic.md", "falsifier.md"):
         _write(round_dir / fname, "notes")
+    _write(round_dir / "novelty.md", NOVELTY_OK)
     _write(round_dir / "judge.md", "Some notes.\nVERDICT: PIVOT\n")
+    _log_activity(round_dir)
 
     assert campaign.check_phase_exit("demo") == []
 

@@ -14,6 +14,7 @@ COMMANDS = {
     "library": ("harness.library.cli", "cross-campaign memory (rejected topics, results, facts, questions)"),
     "campaign": ("harness.campaign", "create / inspect campaigns"),
     "questions": ("harness.questions", "curiosity engine: rank open questions, log surprises/detours, escalate to humans"),
+    "review": ("harness.review.cli", "review rounds: barrier manifests, blind commits, lineups, round checks"),
 }
 
 
